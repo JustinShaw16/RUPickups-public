@@ -1,0 +1,17 @@
+# env files
+.env
+backend/.env
+mobile/.env
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# node
+node_modules
+
+# scripts
+scripts/
+.scripts/
