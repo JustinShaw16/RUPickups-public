@@ -26,23 +26,28 @@ app.add_middleware(
 app.include_router(users_route.router, prefix="/users", tags=["Users"])
 app.include_router(health_route.router, prefix="/health", tags=["Health"])
 app.include_router(lobby_route.router, prefix="/lobby", tags=["Lobby"])
+
 app.include_router(
     lobbyparticipant_route.router,
     prefix="/lobby_participant",
     tags=["Lobby Participant"],
 )
+
 app.include_router(location_route.router, prefix="/location", tags=["Location"])
 app.include_router(matches_route.router, prefix="/matches", tags=["Matches"])
+
 app.include_router(
     matchplayers_route.router,
     prefix="/matchplayers",
     tags=["Match Players"],
 )
+
 app.include_router(
     notifications_route.router,
     prefix="/notifications",
     tags=["Notifications"],
 )
+
 app.include_router(
     playerstats_route.router,
     prefix="/playerstats",
