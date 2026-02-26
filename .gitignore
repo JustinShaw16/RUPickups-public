@@ -11,7 +11,3 @@ venv/
 
 # node
 node_modules
-
-# scripts
-scripts/
-.scripts/
