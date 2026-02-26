@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import (
     users_route,
+    health_route,
     lobby_route,
     lobbyparticipant_route,
     location_route,
@@ -22,13 +23,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
-
-
 app.include_router(users_route.router, prefix="/users", tags=["Users"])
+app.include_router(health_route.router, prefix="/health", tags=["Health"])
 app.include_router(lobby_route.router, prefix="/lobby", tags=["Lobby"])
 app.include_router(
     lobbyparticipant_route.router,

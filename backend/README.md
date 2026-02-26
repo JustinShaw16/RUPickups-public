@@ -70,11 +70,10 @@ You should see:
 ## Testing Database Connection
 
 To verify Supabase connectivity:
-```bash
-python -m scripts.db_check
-```
 
-If successful, you should see a confirmation message with sample data.
+Go to http://127.0.0.1:8000/health/db and see if you get:
+
+{"status":"connected","rows_returned":1}
 
 ## Project Structure
 
