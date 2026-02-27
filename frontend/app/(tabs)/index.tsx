@@ -7,6 +7,7 @@ import ParallaxScrollView from "@/components/parallax-scroll-view";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Link } from "expo-router";
+import { supabase } from '@/api/supabase'
 
 // ✅ iOS simulator: 127.0.0.1
 // ✅ Android emulator: 10.0.2.2
@@ -77,6 +78,15 @@ export default function HomeScreen() {
       <ThemedView style={styles.titleContainer}>
         <ThemedText type="title">Welcome!</ThemedText>
         <HelloWave />
+      </ThemedView>
+
+      <ThemedView style={styles.stepContainer}>
+        <Button
+          title="Logout"
+          onPress={async () => {
+            await supabase.auth.signOut();
+          }}
+        />
       </ThemedView>
 
       {/* Backend status + users */}
