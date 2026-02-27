@@ -1,31 +1,18 @@
-from uuid import UUID
-
 from app.db.supabase_client import get_supabase_client
+from app.repositories import user_repository
+from app.models.users import *
 
 def get_users() -> list[dict]:
-    db = get_supabase_client()
+    return user_repository.get_all_users()
 
-    response = (
-        db
-        .table("users")
-        .select("*")
-        .execute()
+def create_user(payload : UserCreate, user_id: str):
+    existing = user_repository.get_user_by_id(user_id)
+    if existing:
+        return existing
+
+    return user_repository.insert_user(
+        user_id=user_id,
+        username=payload.username,
+        preferred_campus=payload.preferred_campus,
+        phone_number=payload.phone_number
     )
-
-    return response.data or []
-
-def create_user(payload):
-    supabase = get_supabase_client()
-
-    res = (
-        supabase.table("users")
-        .insert(
-            {
-                "username": payload.username,
-                "preferred_campus": payload.preferred_campus,
-                "phone_number": payload.phone_number,
-            }
-        )
-        .execute()
-    )
-    return res.data[0]

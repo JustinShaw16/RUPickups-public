@@ -1,16 +1,9 @@
 from uuid import UUID
 
 from app.db.supabase_client import get_supabase_client
+from app.repositories import lobby_repository
+from app.models.lobby import *
 
-def get_lobbies() ->list[dict]:
-    db = get_supabase_client()
-
-    response = (
-        db
-        .table("lobby")
-        .select("*")
-        .execute()
-    )
-
-    return response.data or []
+def get_all_lobbies() ->list[LobbyResponse]:
+    return lobby_repository.get_all_lobbies()
 
