@@ -4,6 +4,8 @@ import { StatusBar } from 'expo-status-bar'
 import { useEffect, useState } from 'react'
 import 'react-native-reanimated'
 
+import { API_BASE_URL } from '@/api/backend'
+
 import { useColorScheme } from '@/hooks/use-color-scheme'
 import { supabase } from '@/api/supabase'
 import type { Session } from '@supabase/supabase-js'
@@ -37,18 +39,57 @@ export default function RootLayout() {
   useEffect(() => {
     if (loading) return
 
-    const inAuthGroup =
-      segments[0] === 'login' ||
-      segments[0] === 'signup' ||
-      segments[0] === 'complete-profile'
+    const segment0 = segments[0]
+    const inAuth = segment0 === 'login' || segment0 === 'signup'
+    const inCompleteProfile = segment0 === 'complete-profile'
+    const inTabs = segment0 === '(tabs)'
 
-    if (!session && !inAuthGroup) {
-      router.replace('/login')
-    } else if (session && (segments[0] === 'login' || segments[0] === 'signup')) {
-      router.replace('/complete-profile')
+    const route = async () => {
+      if (!session) {
+        if (!inAuth) router.replace('/login')
+        return
+      }
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/users/me`, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        })
+
+        if (res.status === 404) {
+          if (!inCompleteProfile) router.replace('/complete-profile')
+          return
+        }
+
+        if (!res.ok) {
+          if (!inCompleteProfile) router.replace('/complete-profile')
+          return
+        }
+
+        const user = await res.json()
+
+        const hasProfile =
+          !!user?.username &&
+          !!user?.preferred_campus &&
+          !!user?.phone_number
+
+        if (!hasProfile) {
+          if (!inCompleteProfile) router.replace('/complete-profile')
+          return
+        }
+
+        if (inAuth || inCompleteProfile) {
+          router.replace('/(tabs)')
+        }
+      } catch {
+        if (!inCompleteProfile) router.replace('/complete-profile')
+      }
     }
-  }, [session, segments, loading, router])
 
+    route()
+  }, [session, segments, loading, router])
   if (loading) return null
 
   return (
