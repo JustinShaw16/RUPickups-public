@@ -8,11 +8,7 @@ import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Link } from "expo-router";
 import { supabase } from '@/api/supabase'
-
-// ✅ iOS simulator: 127.0.0.1
-// ✅ Android emulator: 10.0.2.2
-// ✅ Phone (Expo Go): your Mac IP (ex: http://192.168.1.23:8000)
-const BASE_URL = "http://localhost:8000";
+import { API_BASE_URL, getAccessToken } from '@/api/backend'
 
 type User = {
   user_id: string;
@@ -33,7 +29,7 @@ export default function HomeScreen() {
 
   async function fetchUsers() {
     try {
-      const res = await fetch(`${BASE_URL}/users/`);
+      const res = await fetch(`${API_BASE_URL}/users/`);
       if (!res.ok) {
         setStatus(`error: ${res.status}`);
         return;
@@ -48,9 +44,18 @@ export default function HomeScreen() {
 
   async function createUser() {
     try {
-      await fetch(`${BASE_URL}/users/`, {
+      const token = await getAccessToken()
+      if (!token) {
+        console.log('Not authenticated')
+        return
+      }
+
+      await fetch(`${API_BASE_URL}/users/`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({
           username: newUsername,
           preferred_campus: "Busch",
