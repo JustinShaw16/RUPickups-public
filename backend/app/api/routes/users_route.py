@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.models.users import UserResponse, UserCreate
-from app.services import users_service
 from app.core.auth import require_user_id
+from app.models.users import UserCreate, UserResponse
+from app.services import users_service
 
 router = APIRouter()
 
@@ -22,8 +22,4 @@ def read_me(user_id: str = Depends(require_user_id)):
 
 @router.post("/me", response_model=UserResponse)
 def upsert_me(payload: UserCreate, user_id: str = Depends(require_user_id)):
-    return users_service.create_user(payload, user_id)
-
-@router.post("/", response_model=UserResponse)
-def add_user(payload: UserCreate, user_id: str = Depends(require_user_id)):
-    return users_service.create_user(payload, user_id)
+    return users_service.upsert_user(user_id=user_id, payload=payload)

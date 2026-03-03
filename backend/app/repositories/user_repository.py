@@ -1,3 +1,6 @@
+from fastapi import Depends, HTTPException, status
+
+from app.db.supabase_admin_client import get_supabase_admin_client
 from app.db.supabase_client import get_supabase_client
 
 def get_all_users():
@@ -24,50 +27,21 @@ def get_user_by_id(user_id: str):
 
     return response.data[0] if response.data else None
     
-def update_user(user_id: str, username: str | None = None, preferred_campus: str | None = None, phone_number: str | None = None):
-    db = get_supabase_client()
+def upsert_user(user_id: str, username: str | None = None, preferred_campus: str | None = None, phone_number: str | None = None):
+    admin_client = get_supabase_admin_client()
 
-    updates = {}
-
-    # Only update fields that were provided (avoid overwriting with None)
-    if username is not None:
-        updates["username"] = username
-    if preferred_campus is not None:
-        updates["preferred_campus"] = preferred_campus
-    if phone_number is not None:
-        updates["phone_number"] = phone_number
-
-    # Nothing to update
-    if not updates:
-        return get_user_by_id(user_id)
+    payload = {
+        "user_id": user_id,
+        "username": username,
+        "preferred_campus": preferred_campus,
+        "phone_number": phone_number
+    }
 
     response = (
-        db.table("users")
-        .update(updates)
-        .eq("user_id", user_id)
-        .execute()
-    )
-
-    return response.data[0] if response.data else get_user_by_id(user_id)
-
-def insert_user(user_id: str, username: str, preferred_campus: str, phone_number: str):
-    db = get_supabase_client()
-
-    response = (
-        db
+        admin_client
         .table("users")
-        .insert(
-            {
-                "user_id": user_id,
-                "username": username,
-                "preferred_campus": preferred_campus,
-                "phone_number": phone_number,
-            }
-        )
+        .upsert(payload, on_conflict="user_id")
         .execute()
     )
-
-    if not response.data:
-        raise Exception("Failed to insert user")
     
-    return response.data[0]
+    return response.data[0] if response.data else get_user_by_id(user_id)

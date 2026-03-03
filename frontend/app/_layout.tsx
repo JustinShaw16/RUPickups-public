@@ -37,12 +37,15 @@ export default function RootLayout() {
   useEffect(() => {
     if (loading) return
 
-    const inAuthGroup = segments[0] === 'login' || segments[0] === 'signup'
+    const inAuthGroup =
+      segments[0] === 'login' ||
+      segments[0] === 'signup' ||
+      segments[0] === 'complete-profile'
 
     if (!session && !inAuthGroup) {
       router.replace('/login')
-    } else if (session && inAuthGroup) {
-      router.replace('/(tabs)')
+    } else if (session && (segments[0] === 'login' || segments[0] === 'signup')) {
+      router.replace('/complete-profile')
     }
   }, [session, segments, loading, router])
 
