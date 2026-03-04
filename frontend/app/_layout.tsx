@@ -53,10 +53,14 @@ export default function RootLayout() {
       try {
         const res = await fetch(`${API_BASE_URL}/users/me`, {
           method: 'GET',
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
+          headers: { Authorization: `Bearer ${session.access_token}` },
         })
+
+        if (res.status === 401) {
+          await supabase.auth.signOut()
+          router.replace('/login')
+          return
+        }
 
         if (res.status === 404) {
           if (!inCompleteProfile) router.replace('/complete-profile')
