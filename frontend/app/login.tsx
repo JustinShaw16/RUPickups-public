@@ -111,7 +111,7 @@ export default function Login() {
       <View style={styles.overlay}>
         <View style={styles.card}>
           <Image
-            source={require('./RUPickups.png')}
+            source={require('./photos/RUPickups.png')}
             style={styles.logo}
             contentFit="contain"
           />
