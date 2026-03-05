@@ -12,7 +12,16 @@ def get_all_lobbies():
         .execute()
     )
 
-    return response.data or []
+    rows = response.data or []
+
+    # Backfill lobby_name for existing rows that predate the column
+    for row in rows:
+        name = row.get("lobby_name")
+        if not isinstance(name, str) or not name.strip():
+            sport = row.get("sport") or "Pickup"
+            row["lobby_name"] = f"{sport} lobby"
+
+    return rows
 
 
 def create_lobby(*, host_user_id: str, payload: LobbyCreate) -> dict:
@@ -20,6 +29,7 @@ def create_lobby(*, host_user_id: str, payload: LobbyCreate) -> dict:
 
     insert_data: dict = {
         "host_user_id": host_user_id,
+        "lobby_name": payload.lobby_name,
         "scheduled_start_time": payload.scheduled_start_time.isoformat(),
         "location_id": str(payload.location_id) if payload.location_id else None,
         "is_public": payload.is_public,

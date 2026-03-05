@@ -21,6 +21,7 @@ import { authedFetch } from '@/api/backend';
 type Lobby = {
   lobby_id: string;
   host_user_id: string;
+  lobby_name: string;
   sport: string;
   campus: string;
   location_id: string | null;
@@ -51,6 +52,7 @@ export default function LobbiesScreen() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
+  const [lobbyName, setLobbyName] = useState<string>('');
   const [sport, setSport] = useState<string>('');
   const [campus, setCampus] = useState<string>('');
   const [locationId, setLocationId] = useState<string | null>(null);
@@ -106,6 +108,7 @@ export default function LobbiesScreen() {
   }, []);
 
   const resetCreateState = () => {
+    setLobbyName('');
     setSport('');
     setCampus('');
     setLocationId(null);
@@ -160,7 +163,12 @@ export default function LobbiesScreen() {
   const handleCreateLobby = async () => {
     setCreateError(null);
 
+    const trimmedLobbyName = lobbyName.trim();
     const trimmedSport = sport.trim();
+    if (!trimmedLobbyName) {
+      setCreateError('Please enter a lobby name.');
+      return;
+    }
     const trimmedCampus = campus.trim();
     const max = parseInt(maxPlayers, 10);
 
@@ -188,6 +196,7 @@ export default function LobbiesScreen() {
 
     try {
       const body: Record<string, unknown> = {
+        lobby_name: trimmedLobbyName,
         sport: trimmedSport,
         campus: trimmedCampus,
         is_public: isPublic,
@@ -272,7 +281,10 @@ export default function LobbiesScreen() {
               return (
                 <View key={lobby.lobby_id} style={styles.lobbyCard}>
                   <View style={styles.lobbyHeader}>
-                    <Text style={styles.lobbySport}>{lobby.sport}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.lobbyName}>{lobby.lobby_name}</Text>
+                      <Text style={styles.lobbySport}>{lobby.sport}</Text>
+                    </View>
                     <View
                       style={[
                         styles.statusPill,
@@ -315,6 +327,15 @@ export default function LobbiesScreen() {
             </Text>
 
             {createError ? <Text style={styles.errorText}>{createError}</Text> : null}
+
+            <Text style={styles.label}>Lobby name</Text>
+            <TextInput
+              style={styles.input}
+              value={lobbyName}
+              onChangeText={setLobbyName}
+              placeholder="e.g. Friday Night Hoops"
+              placeholderTextColor={MUTED_TEXT}
+            />
 
             <Text style={styles.label}>Sport</Text>
             <View style={styles.pillRow}>
@@ -397,9 +418,6 @@ export default function LobbiesScreen() {
             <Text style={styles.label}>Start time</Text>
             {Platform.OS === 'web' ? (
               <View style={styles.dateButton}>
-                {/* Web-only HTML datetime-local input */}
-                {/* eslint-disable-next-line react/jsx-no-undef */}
-                {/* @ts-expect-error web-only element */}
                 <input
                   type="datetime-local"
                   style={{
@@ -590,10 +608,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 4,
   },
-  lobbySport: {
-    fontSize: 18,
+  lobbyName: {
+    fontSize: 16,
     fontWeight: '700',
     color: DARK_NAVY,
+  },
+  lobbySport: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: MUTED_TEXT,
   },
   lobbySubTitle: {
     fontSize: 14,

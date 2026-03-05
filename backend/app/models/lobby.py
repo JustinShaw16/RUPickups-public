@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 
 class LobbyCreate(BaseModel):
+    lobby_name: str = Field(min_length=1, max_length=100)
     sport: str
     campus: str
     scheduled_start_time: datetime
@@ -18,6 +19,7 @@ class LobbyCreate(BaseModel):
 class LobbyResponse(BaseModel):
     lobby_id: UUID
     host_user_id: UUID
+    lobby_name: str
     sport: str
     campus: str
     location_id: Optional[UUID] = None
