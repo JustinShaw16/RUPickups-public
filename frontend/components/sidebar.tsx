@@ -112,6 +112,12 @@ export function Sidebar({ onClose }: SidebarProps) {
         </Pressable>
         <Pressable
           style={({ pressed }) => [styles.link, pressed && styles.linkPressed]}
+          onPress={() => navigateAndClose('/view-profile')}
+        >
+          <ThemedText type="link">View profile</ThemedText>
+        </Pressable>  
+        <Pressable
+          style={({ pressed }) => [styles.link, pressed && styles.linkPressed]}
           onPress={() => navigateAndClose('/user-guide')}
         >
           <ThemedText type="link">User Guide</ThemedText>
