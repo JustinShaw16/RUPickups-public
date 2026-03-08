@@ -2,6 +2,8 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
+  Platform,
   Pressable,
   StyleSheet,
   View,
@@ -9,6 +11,7 @@ import {
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import { API_BASE_URL, getAccessToken } from '@/api/backend';
+import { supabase } from '@/api/supabase';
 import { ThemedText } from '@/components/themed-text';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
@@ -37,6 +40,33 @@ export function Sidebar({ onClose }: SidebarProps) {
   const navigateAndClose = (path: string) => {
     onClose?.();
     router.push(path as '/contact-us' | '/user-guide' | '/view-profile');
+  };
+
+  const performSignOut = async () => {
+    onClose?.();
+    await supabase.auth.signOut();
+    router.replace('/login');
+  };
+
+  const handleSignOut = () => {
+    if (Platform.OS === 'web') {
+      if (window.confirm('Are you sure? Do you want to sign out?')) {
+        performSignOut();
+      }
+    } else {
+      Alert.alert(
+        'Are you sure?',
+        'Do you want to sign out?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Sign out',
+            style: 'destructive',
+            onPress: performSignOut,
+          },
+        ],
+      );
+    }
   };
 
   useEffect(() => {
@@ -121,6 +151,12 @@ export function Sidebar({ onClose }: SidebarProps) {
           onPress={() => navigateAndClose('/user-guide')}
         >
           <ThemedText type="link">User Guide</ThemedText>
+        </Pressable>
+        <Pressable
+          style={({ pressed }) => [styles.link, pressed && styles.linkPressed]}
+          onPress={handleSignOut}
+        >
+          <ThemedText type="link">Sign out</ThemedText>
         </Pressable>
       </View>
     </View>

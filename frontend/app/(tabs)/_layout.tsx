@@ -62,6 +62,7 @@ export default function TabLayout() {
 
       <View style={styles.tabsWrap}>
         <Tabs
+          initialRouteName="lobbies"
           screenOptions={{
             tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
             headerShown: false,
@@ -70,6 +71,7 @@ export default function TabLayout() {
           <Tabs.Screen
             name="index"
             options={{
+              href: null,
               title: 'Home',
               tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
             }}
@@ -84,8 +86,16 @@ export default function TabLayout() {
             }}
           />
           <Tabs.Screen
+            name="leaderboard"
+            options={{
+              title: 'Leaderboard',
+              tabBarIcon: ({ color }) => <IconSymbol size={28} name="trophy.fill" color={color} />,
+            }}
+          />
+          <Tabs.Screen
             name="explore"
             options={{
+              href: null,
               title: 'Explore',
               tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
             }}

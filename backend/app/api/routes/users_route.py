@@ -10,6 +10,10 @@ router = APIRouter()
 def read_users():
     return users_service.get_users()
 
+@router.get("/leaderboard", response_model=list[UserResponse])
+def read_leaderboard(limit: int = 10):
+    return users_service.get_leaderboard(limit=min(limit, 50))
+
 @router.get("/me", response_model=UserResponse)
 def read_me(user_id: str = Depends(require_user_id)):
     user = users_service.get_user_by_id(user_id)

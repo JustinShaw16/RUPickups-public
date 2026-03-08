@@ -15,6 +15,21 @@ def get_all_users():
 
     return response.data or []
 
+
+def get_leaderboard(limit: int = 10):
+    db = get_supabase_client()
+
+    response = (
+        db
+        .table("users")
+        .select("*")
+        .order("elo", desc=True)
+        .limit(limit)
+        .execute()
+    )
+
+    return response.data or []
+
 def get_user_by_id(user_id: str):
     db = get_supabase_client()
 

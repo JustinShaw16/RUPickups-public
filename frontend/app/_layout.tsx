@@ -85,7 +85,7 @@ export default function RootLayout() {
         }
 
         if (inAuth || inCompleteProfile) {
-          router.replace('/(tabs)')
+          router.replace('/(tabs)/lobbies')
         }
       } catch {
         if (!inCompleteProfile) router.replace('/complete-profile')

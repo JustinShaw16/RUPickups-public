@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Modal,
   Platform,
+  Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -36,9 +37,18 @@ type Location = {
   location_id: string;
   name: string;
   campus: string;
+  address: string;
 };
 
-const CAMPUS_OPTIONS = ['College Avenue', 'Busch', 'Livingston', 'Cook/Douglass'] as const;
+const CAMPUS_COLORS: Record<string, string> = {
+  'College Avenue': '#CC0033',
+  Busch: '#0054A4',
+  Livingston: '#2E7D32',
+  'Cook/Douglass': '#E65100',
+};
+function getCampusColor(campus: string): string {
+  return CAMPUS_COLORS[campus] ?? '#6B7280';
+}
 
 const SPORT_OPTIONS = ['Basketball', 'Soccer', 'Volleyball', 'Tennis', 'Other'] as const;
 
@@ -54,7 +64,6 @@ export default function LobbiesScreen() {
 
   const [lobbyName, setLobbyName] = useState<string>('');
   const [sport, setSport] = useState<string>('');
-  const [campus, setCampus] = useState<string>('');
   const [locationId, setLocationId] = useState<string | null>(null);
   const [maxPlayers, setMaxPlayers] = useState<string>('10');
   const [isPublic, setIsPublic] = useState<boolean>(true);
@@ -64,6 +73,7 @@ export default function LobbiesScreen() {
     return d;
   });
   const [showPicker, setShowPicker] = useState(false);
+  const [locationPickerOpen, setLocationPickerOpen] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -110,7 +120,6 @@ export default function LobbiesScreen() {
   const resetCreateState = () => {
     setLobbyName('');
     setSport('');
-    setCampus('');
     setLocationId(null);
     setMaxPlayers('10');
     setIsPublic(true);
@@ -118,6 +127,7 @@ export default function LobbiesScreen() {
     d.setMinutes(d.getMinutes() + 30);
     setScheduledAt(d);
     setCreateError(null);
+    setLocationPickerOpen(false);
   };
 
   const openCreate = () => {
@@ -160,6 +170,10 @@ export default function LobbiesScreen() {
   const locationForLobby = (lobby: Lobby): Location | undefined =>
     locations.find((loc) => loc.location_id === lobby.location_id);
 
+  const selectedLocation = locationId
+    ? locations.find((loc) => loc.location_id === locationId)
+    : null;
+
   const handleCreateLobby = async () => {
     setCreateError(null);
 
@@ -169,15 +183,14 @@ export default function LobbiesScreen() {
       setCreateError('Please enter a lobby name.');
       return;
     }
-    const trimmedCampus = campus.trim();
     const max = parseInt(maxPlayers, 10);
 
     if (!trimmedSport) {
       setCreateError('Please select a sport.');
       return;
     }
-    if (!trimmedCampus) {
-      setCreateError('Please select a campus.');
+    if (!locationId || !selectedLocation) {
+      setCreateError('Please select a location.');
       return;
     }
     if (Number.isNaN(max) || max < 2) {
@@ -198,15 +211,12 @@ export default function LobbiesScreen() {
       const body: Record<string, unknown> = {
         lobby_name: trimmedLobbyName,
         sport: trimmedSport,
-        campus: trimmedCampus,
+        campus: selectedLocation.campus,
+        location_id: locationId,
         is_public: isPublic,
         max_players: max,
         scheduled_start_time: scheduledAt.toISOString(),
       };
-
-      if (locationId) {
-        body.location_id = locationId;
-      }
 
       const res = await authedFetch('/lobbies', {
         method: 'POST',
@@ -358,62 +368,77 @@ export default function LobbiesScreen() {
               })}
             </View>
 
-            <Text style={styles.label}>Campus</Text>
-            <View style={styles.pillRow}>
-              {CAMPUS_OPTIONS.map((option) => {
-                const selected = campus === option;
-                return (
-                  <TouchableOpacity
-                    key={option}
-                    style={[styles.pill, selected && styles.pillSelected]}
-                    onPress={() => setCampus(option)}
-                    activeOpacity={0.9}
-                  >
-                    <Text
-                      style={[styles.pillText, selected && styles.pillTextSelected]}
-                    >
-                      {option}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <Text style={styles.label}>Location (optional)</Text>
-            <ScrollView
-              style={styles.locationList}
-              contentContainerStyle={styles.locationListContent}
+            <Text style={styles.label}>Location</Text>
+            <TouchableOpacity
+              style={styles.locationSelectButton}
+              onPress={() => setLocationPickerOpen(true)}
+              activeOpacity={0.9}
             >
-              {locations.map((loc) => {
-                const selected = locationId === loc.location_id;
-                return (
+              {selectedLocation ? (
+                <View style={styles.locationSelectContent}>
+                  <Text style={[styles.locationSelectCampus, { color: getCampusColor(selectedLocation.campus) }]}>
+                    {selectedLocation.campus}
+                  </Text>
+                  <Text style={styles.locationSelectName}>{selectedLocation.name}</Text>
+                  <Text style={styles.locationSelectAddress}>{selectedLocation.address}</Text>
+                </View>
+              ) : (
+                <Text style={styles.locationSelectPlaceholder}>Select location…</Text>
+              )}
+            </TouchableOpacity>
+            {locations.length === 0 ? (
+              <Text style={styles.mutedTextSmall}>
+                No locations available. Please add locations in the database.
+              </Text>
+            ) : null}
+
+            {/* Location picker modal (dropdown scroll wheel) */}
+            <Modal
+              visible={locationPickerOpen}
+              transparent
+              animationType="slide"
+              onRequestClose={() => setLocationPickerOpen(false)}
+            >
+              <View style={styles.locationPickerBackdrop}>
+                <Pressable style={StyleSheet.absoluteFill} onPress={() => setLocationPickerOpen(false)} />
+                <View style={styles.locationPickerCard}>
+                  <Text style={styles.locationPickerTitle}>Select location</Text>
+                  <ScrollView
+                    style={styles.locationPickerScroll}
+                    contentContainerStyle={styles.locationPickerScrollContent}
+                    keyboardShouldPersistTaps="handled"
+                  >
+                    {locations.map((loc) => {
+                      const selected = locationId === loc.location_id;
+                      return (
+                        <TouchableOpacity
+                          key={loc.location_id}
+                          style={[styles.locationPickerRow, selected && styles.locationPickerRowSelected]}
+                          onPress={() => {
+                            setLocationId(loc.location_id);
+                            setLocationPickerOpen(false);
+                          }}
+                          activeOpacity={0.9}
+                        >
+                          <Text style={[styles.locationPickerCampus, { color: getCampusColor(loc.campus) }]}>
+                            {loc.campus}
+                          </Text>
+                          <Text style={styles.locationPickerName}>{loc.name}</Text>
+                          <Text style={styles.locationPickerAddress}>{loc.address}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
                   <TouchableOpacity
-                    key={loc.location_id}
-                    style={[styles.locationPill, selected && styles.locationPillSelected]}
-                    onPress={() =>
-                      setLocationId(
-                        selected ? null : loc.location_id,
-                      )
-                    }
+                    style={styles.locationPickerDone}
+                    onPress={() => setLocationPickerOpen(false)}
                     activeOpacity={0.9}
                   >
-                    <Text
-                      style={[
-                        styles.locationPillText,
-                        selected && styles.locationPillTextSelected,
-                      ]}
-                    >
-                      {loc.name} · {loc.campus}
-                    </Text>
+                    <Text style={styles.locationPickerDoneText}>Done</Text>
                   </TouchableOpacity>
-                );
-              })}
-              {locations.length === 0 ? (
-                <Text style={styles.mutedTextSmall}>
-                  No saved locations yet. You can still create a lobby without one.
-                </Text>
-              ) : null}
-            </ScrollView>
+                </View>
+              </View>
+            </Modal>
 
             <Text style={styles.label}>Start time</Text>
             {Platform.OS === 'web' ? (
@@ -708,28 +733,102 @@ const styles = StyleSheet.create({
     color: RUTGERS_RED,
     fontWeight: '700',
   },
-  locationList: {
-    maxHeight: 120,
+  locationSelectButton: {
     borderRadius: 14,
     borderWidth: 1,
     borderColor: BORDER_GRAY,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    backgroundColor: LIGHT_GRAY,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minHeight: 72,
+    justifyContent: 'center',
   },
-  locationListContent: {
-    paddingBottom: 4,
+  locationSelectContent: {
+    gap: 2,
   },
-  locationPill: {
-    paddingVertical: 6,
+  locationSelectCampus: {
+    fontSize: 14,
+    fontWeight: '700',
   },
-  locationPillSelected: {},
-  locationPillText: {
-    fontSize: 13,
+  locationSelectName: {
+    fontSize: 14,
+    fontWeight: '600',
     color: DARK_NAVY,
   },
-  locationPillTextSelected: {
-    color: RUTGERS_RED,
+  locationSelectAddress: {
+    fontSize: 12,
+    color: MUTED_TEXT,
+    marginTop: 2,
+  },
+  locationSelectPlaceholder: {
+    fontSize: 14,
+    color: MUTED_TEXT,
+  },
+  locationPickerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  locationPickerCard: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 24,
+    maxHeight: '70%',
+  },
+  locationPickerTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: DARK_NAVY,
+    marginBottom: 12,
+  },
+  locationPickerScroll: {
+    maxHeight: 320,
+  },
+  locationPickerScrollContent: {
+    paddingBottom: 12,
+    gap: 0,
+  },
+  locationPickerRow: {
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  locationPickerRowSelected: {
+    borderColor: RUTGERS_RED,
+    backgroundColor: 'rgba(204, 0, 51, 0.08)',
+  },
+  locationPickerCampus: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  locationPickerName: {
+    fontSize: 14,
     fontWeight: '600',
+    color: DARK_NAVY,
+    marginTop: 2,
+  },
+  locationPickerAddress: {
+    fontSize: 12,
+    color: MUTED_TEXT,
+    marginTop: 2,
+  },
+  locationPickerDone: {
+    marginTop: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderRadius: 12,
+    backgroundColor: DARK_NAVY,
+  },
+  locationPickerDoneText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   dateButton: {
     paddingVertical: 12,
