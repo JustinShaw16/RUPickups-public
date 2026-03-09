@@ -253,9 +253,13 @@ export default function LobbiesScreen() {
       }
 
       const created: Lobby = await res.json();
+      const createdWithCount: Lobby = {
+        ...created,
+        participant_count: created.participant_count ?? 1,
+      };
 
       setLobbies((prev) =>
-        [created, ...prev].sort(
+        [createdWithCount, ...prev].sort(
           (a, b) =>
             new Date(a.scheduled_start_time).getTime() -
             new Date(b.scheduled_start_time).getTime(),
