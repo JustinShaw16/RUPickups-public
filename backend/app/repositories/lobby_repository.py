@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from app.db.supabase_client import get_supabase_client
+from app.db.supabase_admin_client import get_supabase_admin_client
 from app.models.lobby import LobbyCreate, LobbyUpdate
 
 
@@ -13,6 +14,119 @@ def get_lobby_by_id(lobby_id: UUID) -> dict | None:
     if not isinstance(row.get("lobby_name"), str) or not str(row.get("lobby_name", "")).strip():
         row["lobby_name"] = f"{row.get('sport') or 'Pickup'} lobby"
     return row
+
+
+def _normalize_uuid(s: str) -> str:
+    """Canonical UUID string so DB comparison matches (Postgres normalizes UUIDs)."""
+    try:
+        return str(UUID(str(s).strip()))
+    except (TypeError, ValueError):
+        return str(s).strip()
+
+
+def get_upcoming_lobbies_for_user(user_id: str):
+    """
+    Return upcoming lobbies for the current user.
+    1. Match current user's user_id to player_id in lobby_participants → get lobby_ids.
+    2. Fetch full lobby rows for those lobby_ids.
+    3. Filter to future start times and return.
+    """
+    from datetime import datetime, timezone
+
+    db = get_supabase_admin_client()
+    if db is None:
+        raise RuntimeError(
+            "SUPABASE_SERVICE_ROLE_KEY is required for /lobbies/my/upcoming. "
+            "Set it in backend .env to read lobby participants."
+        )
+    now_dt = datetime.now(timezone.utc)
+    current_user_id = str(user_id).strip()
+    current_user_id_normalized = _normalize_uuid(current_user_id)
+
+    # Step 1: Find all lobby_ids where the current user is a participant (player_id = current user_id)
+    participants_resp = (
+        db.table("lobby_participants")
+        .select("lobby_id, player_id")
+        .execute()
+    )
+    all_participant_rows = participants_resp.data or []
+    my_lobby_ids = []
+    for r in all_participant_rows:
+        pid = r.get("player_id")
+        if pid is None:
+            continue
+        pid_str = str(pid)
+        # Match current user: exact string or normalized UUID
+        if pid_str == current_user_id or pid_str == current_user_id_normalized:
+            lid = r.get("lobby_id")
+            if lid is not None:
+                my_lobby_ids.append(str(lid))
+    my_lobby_ids = list(dict.fromkeys(my_lobby_ids))
+
+    if not my_lobby_ids:
+        return []
+
+    # Step 2: Get full lobby info for those lobby_ids
+    lobbies_resp = (
+        db.table("lobby")
+        .select("*")
+        .in_("lobby_id", my_lobby_ids)
+        .execute()
+    )
+    all_rows = lobbies_resp.data or []
+    rows = []
+    for r in all_rows:
+        scheduled = r.get("scheduled_start_time")
+        if not scheduled:
+            continue
+        try:
+            # Compare as datetime; accept both ISO strings and timestamps
+            if isinstance(scheduled, str):
+                start_dt = datetime.fromisoformat(scheduled.replace("Z", "+00:00"))
+            else:
+                start_dt = scheduled
+            if start_dt.tzinfo is None:
+                start_dt = start_dt.replace(tzinfo=timezone.utc)
+            if start_dt >= now_dt:
+                rows.append(r)
+        except (TypeError, ValueError):
+            continue
+
+    # Sort by scheduled_start_time
+    rows.sort(key=lambda r: r.get("scheduled_start_time") or "")
+
+    # Add participant_count and backfill lobby_name
+    lobby_ids = [str(r["lobby_id"]) for r in rows if r.get("lobby_id")]
+    participant_counts = {}
+    if lobby_ids:
+        p_resp = (
+            db.table("lobby_participants")
+            .select("lobby_id, player_id")
+            .in_("lobby_id", lobby_ids)
+            .execute()
+        )
+        for r in p_resp.data or []:
+            lid = str(r.get("lobby_id"))
+            if not lid:
+                continue
+            entry = participant_counts.setdefault(lid, {"players": set(), "count": 0})
+            pid = str(r.get("player_id"))
+            if pid and pid not in entry["players"]:
+                entry["players"].add(pid)
+                entry["count"] += 1
+    for row in rows:
+        name = row.get("lobby_name")
+        if not isinstance(name, str) or not name.strip():
+            row["lobby_name"] = f"{row.get('sport') or 'Pickup'} lobby"
+        lid = str(row.get("lobby_id") or "")
+        host_id = str(row.get("host_user_id") or "")
+        entry = participant_counts.get(lid)
+        count = int(entry["count"]) if entry else 0
+        if host_id and (not entry or host_id not in entry.get("players", set())):
+            count += 1
+        row["participant_count"] = count
+
+    return rows
 
 
 def get_all_lobbies():

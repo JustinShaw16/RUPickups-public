@@ -8,6 +8,10 @@ def get_all_lobbies() -> list[LobbyResponse]:
     return lobby_repository.get_all_lobbies()
 
 
+def get_my_upcoming_lobbies(user_id: str) -> list:
+    return lobby_repository.get_upcoming_lobbies_for_user(user_id)
+
+
 def get_lobby_by_id(lobby_id: UUID) -> dict | None:
     return lobby_repository.get_lobby_by_id(lobby_id)
 

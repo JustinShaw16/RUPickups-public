@@ -15,6 +15,14 @@ def get_all_lobbies():
     return lobby_service.get_all_lobbies()
 
 
+@router.get("/my/upcoming", response_model=list[LobbyResponse])
+def get_my_upcoming_lobbies(user_id: str = Depends(require_user_id)):
+    try:
+        return lobby_service.get_my_upcoming_lobbies(user_id=user_id)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
 @router.get("/{lobby_id}", response_model=LobbyResponse)
 def get_lobby(lobby_id: UUID, user_id: str = Depends(require_user_id)):
     lobby = lobby_service.get_lobby_by_id(lobby_id)
