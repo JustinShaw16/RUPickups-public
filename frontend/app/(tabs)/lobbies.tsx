@@ -19,7 +19,7 @@ import DateTimePicker, {
 
 import { useRouter } from 'expo-router';
 
-import { authedFetch } from '@/api/backend';
+import { API_BASE_URL, authedFetch } from '@/api/backend';
 
 type Lobby = {
   lobby_id: string;
@@ -85,26 +85,13 @@ export default function LobbiesScreen() {
       setLoading(true);
       setError(null);
       try {
-        const [lobbiesRes, locationsRes, meRes] = await Promise.all([
-          authedFetch('/lobbies'),
-          authedFetch('/locations/location_manifest'),
-          authedFetch('/users/me').catch(() => null),
-        ]);
+        const lobbiesRes = await fetch(`${API_BASE_URL}/lobbies`);
 
         if (!lobbiesRes.ok) {
           throw new Error(`Failed to load lobbies (${lobbiesRes.status})`);
         }
-        if (!locationsRes.ok) {
-          throw new Error(`Failed to load locations (${locationsRes.status})`);
-        }
 
         const lobbiesData: Lobby[] = await lobbiesRes.json();
-        const locationsData: Location[] = await locationsRes.json();
-        if (meRes?.ok) {
-          const me = (await meRes.json()) as { user_id: string };
-          setCurrentUserId(me.user_id);
-        }
-
         setLobbies(
           lobbiesData.sort(
             (a, b) =>
@@ -112,7 +99,31 @@ export default function LobbiesScreen() {
               new Date(b.scheduled_start_time).getTime(),
           ),
         );
-        setLocations(locationsData);
+
+        // Load locations and current user in the background so lobbies appear faster
+        void (async () => {
+          try {
+            const locationsRes = await fetch(`${API_BASE_URL}/locations/location_manifest`);
+            if (locationsRes.ok) {
+              const locationsData: Location[] = await locationsRes.json();
+              setLocations(locationsData);
+            }
+          } catch {
+            // ignore location errors for the main lobbies list
+          }
+        })();
+
+        void (async () => {
+          try {
+            const meRes = await authedFetch('/users/me');
+            if (meRes.ok) {
+              const me = (await meRes.json()) as { user_id: string };
+              setCurrentUserId(me.user_id);
+            }
+          } catch {
+            // ignore user loading errors; lobbies list still works
+          }
+        })();
       } catch (e) {
         if (e instanceof Error) {
           setError(e.message);

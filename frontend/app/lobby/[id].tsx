@@ -20,7 +20,7 @@ import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/dat
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
-import { authedFetch } from '@/api/backend';
+import { API_BASE_URL, authedFetch } from '@/api/backend';
 
 const SPORT_OPTIONS = ['Basketball', 'Soccer', 'Volleyball', 'Tennis', 'Other'] as const;
 
@@ -119,7 +119,7 @@ export default function LobbyDetailScreen() {
 
   const loadLocations = useCallback(async () => {
     try {
-      const res = await authedFetch('/locations/location_manifest');
+      const res = await fetch(`${API_BASE_URL}/locations/location_manifest`);
       if (!res.ok) return;
       const data = (await res.json()) as Location[];
       setLocations(data);
@@ -142,13 +142,16 @@ export default function LobbyDetailScreen() {
   const loadAll = useCallback(async () => {
     if (!id) return;
     setLoading(true);
-    await Promise.all([
-      loadLobby(),
-      loadParticipants(),
-      loadLocations(),
-      loadCurrentUser(),
-    ]);
-    setLoading(false);
+    try {
+      await Promise.all([loadLobby(), loadParticipants()]);
+    } finally {
+      setLoading(false);
+    }
+
+    // Load locations and current user in the background so the main
+    // lobby view appears as soon as core data is ready.
+    void loadLocations();
+    void loadCurrentUser();
   }, [id, loadLobby, loadParticipants, loadLocations, loadCurrentUser]);
 
   const onRefresh = useCallback(async () => {
