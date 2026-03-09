@@ -17,6 +17,8 @@ import DateTimePicker, {
   DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
 
+import { useRouter } from 'expo-router';
+
 import { authedFetch } from '@/api/backend';
 
 type Lobby = {
@@ -31,6 +33,7 @@ type Lobby = {
   status: string;
   scheduled_start_time: string;
   created_at: string;
+  participant_count?: number | null;
 };
 
 type Location = {
@@ -53,8 +56,10 @@ function getCampusColor(campus: string): string {
 const SPORT_OPTIONS = ['Basketball', 'Soccer', 'Volleyball', 'Tennis', 'Other'] as const;
 
 export default function LobbiesScreen() {
+  const router = useRouter();
   const [lobbies, setLobbies] = useState<Lobby[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,9 +85,10 @@ export default function LobbiesScreen() {
       setLoading(true);
       setError(null);
       try {
-        const [lobbiesRes, locationsRes] = await Promise.all([
+        const [lobbiesRes, locationsRes, meRes] = await Promise.all([
           authedFetch('/lobbies'),
           authedFetch('/locations/location_manifest'),
+          authedFetch('/users/me').catch(() => null),
         ]);
 
         if (!lobbiesRes.ok) {
@@ -94,6 +100,10 @@ export default function LobbiesScreen() {
 
         const lobbiesData: Lobby[] = await lobbiesRes.json();
         const locationsData: Location[] = await locationsRes.json();
+        if (meRes?.ok) {
+          const me = (await meRes.json()) as { user_id: string };
+          setCurrentUserId(me.user_id);
+        }
 
         setLobbies(
           lobbiesData.sort(
@@ -289,10 +299,21 @@ export default function LobbiesScreen() {
               });
 
               return (
-                <View key={lobby.lobby_id} style={styles.lobbyCard}>
+                <Pressable
+                  key={lobby.lobby_id}
+                  style={({ pressed }) => [styles.lobbyCard, pressed && styles.lobbyCardPressed]}
+                  onPress={() => router.push(`/lobby/${lobby.lobby_id}`)}
+                >
                   <View style={styles.lobbyHeader}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.lobbyName}>{lobby.lobby_name}</Text>
+                      <View style={styles.lobbyNameRow}>
+                        <Text style={styles.lobbyName}>{lobby.lobby_name}</Text>
+                        {currentUserId === lobby.host_user_id && (
+                          <View style={styles.yourLobbyPill}>
+                            <Text style={styles.yourLobbyPillText}>your lobby</Text>
+                          </View>
+                        )}
+                      </View>
                       <Text style={styles.lobbySport}>{lobby.sport}</Text>
                     </View>
                     <View
@@ -313,10 +334,11 @@ export default function LobbiesScreen() {
                   <View style={styles.metaRow}>
                     <Text style={styles.metaText}>{whenLabel}</Text>
                     <Text style={styles.metaText}>
-                      {lobby.is_public ? 'Public' : 'Private'} · {lobby.max_players} players
+                      {lobby.is_public ? 'Public' : 'Private'} ·{' '}
+                      {(lobby.participant_count ?? 0)}/{lobby.max_players} players
                     </Text>
                   </View>
-                </View>
+                </Pressable>
               );
             })}
           </ScrollView>
@@ -627,16 +649,36 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BORDER_GRAY,
   },
+  lobbyCardPressed: {
+    opacity: 0.9,
+  },
   lobbyHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 4,
   },
+  lobbyNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
   lobbyName: {
     fontSize: 16,
     fontWeight: '700',
     color: DARK_NAVY,
+  },
+  yourLobbyPill: {
+    backgroundColor: 'rgba(204, 0, 51, 0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+  },
+  yourLobbyPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: RUTGERS_RED,
   },
   lobbySport: {
     fontSize: 14,

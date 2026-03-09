@@ -16,6 +16,16 @@ class LobbyCreate(BaseModel):
     max_players: int = Field(default=2, ge=2, le=100)
 
 
+class LobbyUpdate(BaseModel):
+    lobby_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    sport: Optional[str] = None
+    campus: Optional[str] = None
+    scheduled_start_time: Optional[datetime] = None
+    location_id: Optional[UUID] = None
+    is_public: Optional[bool] = None
+    max_players: Optional[int] = Field(default=None, ge=2, le=100)
+
+
 class LobbyResponse(BaseModel):
     lobby_id: UUID
     host_user_id: UUID
@@ -28,6 +38,7 @@ class LobbyResponse(BaseModel):
     status: str
     scheduled_start_time: datetime
     created_at: datetime
+    participant_count: int | None = None
 
     class Config:
         from_attributes = True
