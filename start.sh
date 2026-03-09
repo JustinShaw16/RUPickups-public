@@ -56,8 +56,8 @@ fi
 
 if [[ "$NEED_ENV" -eq 1 ]]; then
   echo ""
-  echo "Edit backend/.env (Supabase URL, service role key) and frontend/.env"
-  echo "(EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY), then run ./start.sh again."
+  echo "Edit backend/.env (SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_JWT_SECRET)"
+  echo "and frontend/.env (EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY), then run ./start.sh again."
   exit 1
 fi
 
