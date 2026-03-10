@@ -124,8 +124,38 @@ Then connect using:
 
 - The web (localhost:8081)
 - iOS simulator (TBD)
-- Android emulator (TBD)
+- Android emulator (Pixel 6 via Android Studio, see below)
 - A physical device via Expo Go (TBD)
+
+### Android: run on Pixel 6 emulator (Android Studio)
+
+On macOS, the easiest way to run the app on Android is with the Android Studio emulator:
+
+1. **Install / open Android Studio**
+   - Download Android Studio from the official site if you don’t already have it.
+   - Launch Android Studio (any project is fine).
+2. **Create a Pixel 6 virtual device**
+   - In Android Studio, open **Tools → Device Manager**.
+   - Click **“Create device…”**, choose **Pixel 6**, and click **Next**.
+   - Download a recent system image (e.g. Android 14/15, ARM64), then click **Next → Finish**.
+3. **Start the emulator**
+   - In Device Manager, click the **▶** (Run) icon next to the Pixel 6 AVD.
+   - Wait until the emulator is fully booted.
+4. **Run the app**
+   - From the project root, run the setup script if you haven’t yet:
+     ```bash
+     ./start.sh
+     ```
+   - On first run, `start.sh` will create `backend/.env` and `frontend/.env` and prompt you to fill in:
+     - Supabase keys (`EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, etc.).
+     - Optionally, per‑platform API URLs in `frontend/.env`:
+       - `EXPO_PUBLIC_API_BASE_URL_WEB=http://localhost:8000`
+       - `EXPO_PUBLIC_API_BASE_URL_ANDROID=http://10.0.2.2:8000`
+   - After editing the env files, run:
+     ```bash
+     ./start.sh
+     ```
+   - When the Expo dev server is running and the Pixel 6 emulator is open, press **`a`** in the Expo terminal (or run `npx expo start --android`) to launch the app on the emulator.
 
 ---
 
