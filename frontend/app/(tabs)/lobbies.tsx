@@ -78,6 +78,7 @@ export default function LobbiesScreen() {
     return d;
   });
   const [showPicker, setShowPicker] = useState(false);
+  const [androidPickerStep, setAndroidPickerStep] = useState<'date' | 'time' | null>(null);
   const [locationPickerOpen, setLocationPickerOpen] = useState(false);
 
   useEffect(() => {
@@ -149,6 +150,8 @@ export default function LobbiesScreen() {
     setScheduledAt(d);
     setCreateError(null);
     setLocationPickerOpen(false);
+    setShowPicker(false);
+    setAndroidPickerStep(null);
   };
 
   const openCreate = () => {
@@ -164,18 +167,41 @@ export default function LobbiesScreen() {
     if (Platform.OS === 'android') {
       if (event.type === 'dismissed') {
         setShowPicker(false);
+        setAndroidPickerStep(null);
         return;
       }
-      if (date) {
-        setScheduledAt(date);
+      if (!date || Number.isNaN(date.getTime())) return;
+      if (androidPickerStep === 'date') {
+        setScheduledAt((prev) => {
+          const next = new Date(prev);
+          next.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
+          return next;
+        });
+        setAndroidPickerStep('time');
+        return;
+      }
+      if (androidPickerStep === 'time') {
+        setScheduledAt((prev) => {
+          const next = new Date(prev);
+          next.setHours(date.getHours(), date.getMinutes(), 0, 0);
+          return next;
+        });
         setShowPicker(false);
+        setAndroidPickerStep(null);
       }
       return;
     }
 
-    // iOS (and other platforms) keep the picker visible and update live
-    if (date) {
+    // iOS: single datetime picker
+    if (date && !Number.isNaN(date.getTime())) {
       setScheduledAt(date);
+    }
+  };
+
+  const openDatePicker = () => {
+    setShowPicker(true);
+    if (Platform.OS === 'android') {
+      setAndroidPickerStep('date');
     }
   };
 
@@ -523,18 +549,35 @@ export default function LobbiesScreen() {
               <>
                 <TouchableOpacity
                   style={styles.dateButton}
-                  onPress={() => setShowPicker(true)}
+                  onPress={openDatePicker}
                   activeOpacity={0.9}
                 >
                   <Text style={styles.dateButtonText}>{formattedDate}</Text>
                 </TouchableOpacity>
-                {showPicker && (
+                {showPicker && Platform.OS === 'ios' && (
                   <DateTimePicker
                     value={scheduledAt}
                     mode="datetime"
                     minimumDate={new Date()}
                     onChange={handleDateChange}
-                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    display="spinner"
+                  />
+                )}
+                {showPicker && Platform.OS === 'android' && androidPickerStep === 'date' && (
+                  <DateTimePicker
+                    value={scheduledAt}
+                    mode="date"
+                    minimumDate={new Date()}
+                    onChange={handleDateChange}
+                    display="default"
+                  />
+                )}
+                {showPicker && Platform.OS === 'android' && androidPickerStep === 'time' && (
+                  <DateTimePicker
+                    value={scheduledAt}
+                    mode="time"
+                    onChange={handleDateChange}
+                    display="default"
                   />
                 )}
               </>

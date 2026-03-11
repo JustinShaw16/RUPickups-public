@@ -19,6 +19,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { API_BASE_URL, authedFetch } from '@/api/backend';
 
@@ -61,6 +62,7 @@ const MUTED_TEXT = '#6B7280';
 export default function LobbyDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [lobby, setLobby] = useState<Lobby | null>(null);
   const [locations, setLocations] = useState<Location[]>([]);
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -352,7 +354,7 @@ export default function LobbyDetailScreen() {
   if (!id) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.container}>
+        <View style={[styles.container, { paddingTop: Math.max(insets.top, 12) }]}>
           <Text style={styles.errorText}>Missing lobby ID.</Text>
         </View>
       </SafeAreaView>
@@ -361,11 +363,12 @@ export default function LobbyDetailScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: Math.max(insets.top, 12) }]}>
         <View style={styles.headerRow}>
           <Pressable
             onPress={() => router.replace('/(tabs)/lobbies')}
             style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
             <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
           </Pressable>
@@ -749,6 +752,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 20,
+    zIndex: 10,
+    elevation: 10,
   },
   backButton: {
     padding: 8,

@@ -20,6 +20,7 @@ const MAPPING = {
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
   'person.3.sequence.fill': 'groups',
+  'calendar': 'event',
 } as IconMapping;
 
 /**

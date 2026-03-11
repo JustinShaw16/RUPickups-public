@@ -7,6 +7,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import { HapticTab } from '@/components/haptic-tab';
@@ -19,48 +20,73 @@ const DRAWER_WIDTH = 280;
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const insets = useSafeAreaInsets();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const slideAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
   const colors = Colors[colorScheme ?? 'light'];
 
+  // Only run open animation when drawer opens; close is handled in closeDrawer so the panel actually slides off before we unmount the backdrop
   useEffect(() => {
+    if (!drawerOpen) return;
     Animated.parallel([
       Animated.timing(slideAnim, {
-        toValue: drawerOpen ? 0 : -DRAWER_WIDTH,
+        toValue: 0,
         duration: 250,
         useNativeDriver: true,
       }),
       Animated.timing(backdropAnim, {
-        toValue: drawerOpen ? 1 : 0,
+        toValue: 1,
         duration: 250,
         useNativeDriver: true,
       }),
     ]).start();
   }, [drawerOpen, slideAnim, backdropAnim]);
 
-  const closeDrawer = () => setDrawerOpen(false);
+  const closeDrawer = () => {
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: -DRAWER_WIDTH,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+      Animated.timing(backdropAnim, {
+        toValue: 0,
+        duration: 250,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setDrawerOpen(false);
+    });
+  };
 
   return (
     <View style={styles.container}>
-      {/* Top bar: menu (left) + logo */}
-      <View style={[styles.topBar, { backgroundColor: colors.background }]}>
-        <Image
-          source={require('../photos/RUPickups.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
-        <View style={styles.menuButtonWrap}>
-          <Pressable
-            style={({ pressed }) => [styles.menuButton, pressed && styles.menuButtonPressed]}
-            onPress={() => setDrawerOpen(true)}
-          >
-            <MaterialIcons name="menu" size={28} color={colors.text} />
-          </Pressable>
+      {/* When drawer is open, block touches to main content so backdrop receives them and closes drawer */}
+      <View style={styles.mainContent} pointerEvents={drawerOpen ? 'none' : 'auto'}>
+        {/* Top bar: menu (left) + logo — paddingTop so menu isn't clipped by status bar on Android */}
+        <View
+          style={[
+            styles.topBar,
+            { backgroundColor: colors.background, paddingTop: Math.max(insets.top, 10) },
+          ]}
+        >
+          <View style={styles.menuButtonWrap}>
+            <Pressable
+              style={({ pressed }) => [styles.menuButton, pressed && styles.menuButtonPressed]}
+              onPress={() => setDrawerOpen(true)}
+            >
+              <MaterialIcons name="menu" size={28} color={colors.text} />
+            </Pressable>
+          </View>
+          <Image
+            source={require('../photos/RUPickups.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
         </View>
-      </View>
 
-      <View style={styles.tabsWrap}>
+        <View style={styles.tabsWrap}>
         <Tabs
           initialRouteName="lobbies"
           screenOptions={{
@@ -86,6 +112,13 @@ export default function TabLayout() {
             }}
           />
           <Tabs.Screen
+            name="my-games"
+            options={{
+              title: 'My Games',
+              tabBarIcon: ({ color }) => <IconSymbol size={28} name="calendar" color={color} />,
+            }}
+          />
+          <Tabs.Screen
             name="leaderboard"
             options={{
               title: 'Leaderboard',
@@ -101,25 +134,27 @@ export default function TabLayout() {
             }}
           />
         </Tabs>
+        </View>
       </View>
 
-      {/* Drawer overlay */}
+      {/* Backdrop only to the right of the drawer so tap there reliably closes it */}
       {drawerOpen && (
-        <Pressable style={StyleSheet.absoluteFill} onPress={closeDrawer}>
-          <Animated.View
-            style={[
-              styles.backdrop,
-              {
-                opacity: backdropAnim,
-              },
-            ]}
-          />
-        </Pressable>
+        <View style={styles.backdropWrap} pointerEvents="box-none">
+          <Pressable
+            style={styles.backdropTouchable}
+            onPress={closeDrawer}
+          >
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.backdrop, { opacity: backdropAnim }]}
+            />
+          </Pressable>
+        </View>
       )}
       <Animated.View
         style={[
           styles.drawerPanel,
-          { backgroundColor: colors.background },
+          { backgroundColor: colors.background, paddingTop: insets.top },
           { transform: [{ translateX: slideAnim }] },
         ]}
         pointerEvents={drawerOpen ? 'auto' : 'none'}
@@ -134,6 +169,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  mainContent: {
+    flex: 1,
+  },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -143,15 +181,11 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(0,0,0,0.08)',
   },
   menuButtonWrap: {
-    position: 'absolute',
-    left: 12,
-    top: 0,
-    bottom: 0,
     zIndex: 1,
-    justifyContent: 'center',
   },
   menuButton: {
     padding: 8,
+    marginRight: 4,
   },
   menuButtonPressed: {
     opacity: 0.7,
@@ -159,10 +193,21 @@ const styles = StyleSheet.create({
   logo: {
     height: 52,
     width: 240,
-    marginLeft: -25,
+    marginLeft: -75,
   },
   tabsWrap: {
     flex: 1,
+  },
+  backdropWrap: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 9,
+  },
+  backdropTouchable: {
+    position: 'absolute',
+    left: DRAWER_WIDTH,
+    right: 0,
+    top: 0,
+    bottom: 0,
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
@@ -177,3 +222,4 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
 });
+
