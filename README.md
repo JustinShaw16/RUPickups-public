@@ -65,6 +65,8 @@ You must then:
 
 Once everything is configured correctly, the backend and frontend will start automatically.
 
+Important note to teachers/TA : Please check the database instructions section to find what to put in the env files.
+
 ---
 
 ## 3. Running backend and frontend manually (optional)
@@ -165,3 +167,9 @@ On macOS, the easiest way to run the app on Android is with the Android Studio e
 - **Frontend docs**: see `frontend/README.md` for Expo-specific workflows.
 
 Once both backend and frontend are running, you can develop features under `backend/app` and `frontend/app` as usual.
+
+---
+
+## 5. Use of Artificial Intelligence
+
+Artificial Intelligence has been used in the development of this application so far. We are at an early stage in the app and have thus used AI to make it easier to visualize the UI. A lot of our actual work comes with setting up the infrastructure, creating API calls, and connecting to the database on both the backend and frontend. However, smaller things like adjusting the margins or color of a box and more things that make it look "better" have been completed more efficiently with AI.
