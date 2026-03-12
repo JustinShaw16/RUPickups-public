@@ -6,6 +6,15 @@ This root `README` explains how to set up the entire project (backend + frontend
 
 ---
 
+## 0. Prerequisites
+
+Install if you don't already have:
+- Git
+- Python 3.11+
+- Node.js 18+ and npm
+
+---
+
 ## 1. Clone the repository
 
 ```bash
