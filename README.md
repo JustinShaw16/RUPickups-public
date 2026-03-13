@@ -138,7 +138,9 @@ Then connect using:
 - Android emulator (Pixel 6 via Android Studio, see below)
 - A physical device via Expo Go (TBD)
 
-### Android: run on Pixel 6 emulator (Android Studio)
+---
+
+## 4. Running it as an Android Application: run on Pixel 6 emulator (Android Studio)
 
 On macOS, the easiest way to run the app on Android is with the Android Studio emulator:
 
@@ -170,7 +172,7 @@ On macOS, the easiest way to run the app on Android is with the Android Studio e
 
 ---
 
-## 4. Useful references
+## 5. Useful references
 
 - **Backend docs**: see `backend/README.md` for more detailed backend setup and architecture.
 - **Frontend docs**: see `frontend/README.md` for Expo-specific workflows.
@@ -179,6 +181,6 @@ Once both backend and frontend are running, you can develop features under `back
 
 ---
 
-## 5. Use of Artificial Intelligence
+## 6. Use of Artificial Intelligence
 
 Artificial Intelligence has been used in the development of this application so far. We are at an early stage in the app and have thus used AI to make it easier to visualize the UI. A lot of our actual work comes with setting up the infrastructure, creating API calls, and connecting to the database on both the backend and frontend. However, smaller things like adjusting the margins or color of a box and more things that make it look "better" have been completed more efficiently with AI.
