@@ -85,6 +85,7 @@ export default function LobbyDetailScreen() {
   const [saving, setSaving] = useState(false);
   const [editLocationPickerOpen, setEditLocationPickerOpen] = useState(false);
   const [showEditPicker, setShowEditPicker] = useState(false);
+  const [editAndroidPickerStep, setEditAndroidPickerStep] = useState<'date' | 'time'>('date');
 
   const loadLobby = useCallback(async () => {
     if (!id) return;
@@ -239,21 +240,46 @@ export default function LobbyDetailScreen() {
     setEditOpen(false);
     setEditLocationPickerOpen(false);
     setShowEditPicker(false);
+    setEditAndroidPickerStep('date');
   }, []);
 
-  const handleEditDateChange = useCallback(
-    (event: DateTimePickerEvent, date?: Date) => {
-      if (Platform.OS === 'android' && event.type === 'dismissed') {
+  const openEditDatePicker = () => {
+    if (Platform.OS === 'android') {
+      setEditAndroidPickerStep('date');
+    }
+    setShowEditPicker(true);
+  };
+
+  const handleEditDateChange = (event: DateTimePickerEvent, date?: Date) => {
+    if (Platform.OS === 'android') {
+      if (event.type === 'dismissed') {
         setShowEditPicker(false);
+        setEditAndroidPickerStep('date');
         return;
       }
-      if (date) {
-        setEditScheduledAt(date);
-        if (Platform.OS === 'android') setShowEditPicker(false);
+      if (!date) return;
+
+      if (editAndroidPickerStep === 'date') {
+        const next = new Date(editScheduledAt);
+        next.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
+        setEditScheduledAt(next);
+        setEditAndroidPickerStep('time');
+        setShowEditPicker(true);
+        return;
       }
-    },
-    [],
-  );
+
+      // time step
+      const next = new Date(editScheduledAt);
+      next.setHours(date.getHours(), date.getMinutes(), 0, 0);
+      setEditScheduledAt(next);
+      setShowEditPicker(false);
+      setEditAndroidPickerStep('date');
+      return;
+    }
+
+    // iOS
+    if (date) setEditScheduledAt(date);
+  };
 
   const handleSaveEdit = async () => {
     if (!id || !lobby || saving) return;
@@ -674,7 +700,7 @@ export default function LobbyDetailScreen() {
               <>
                 <TouchableOpacity
                   style={styles.dateButton}
-                  onPress={() => setShowEditPicker(true)}
+                  onPress={openEditDatePicker}
                   activeOpacity={0.9}
                 >
                   <Text style={styles.dateButtonText}>
@@ -684,13 +710,30 @@ export default function LobbyDetailScreen() {
                     })}
                   </Text>
                 </TouchableOpacity>
-                {showEditPicker && (
+                {showEditPicker && Platform.OS === 'ios' && (
                   <DateTimePicker
                     value={editScheduledAt}
                     mode="datetime"
                     minimumDate={new Date()}
                     onChange={handleEditDateChange}
-                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    display="spinner"
+                  />
+                )}
+                {showEditPicker && Platform.OS === 'android' && editAndroidPickerStep === 'date' && (
+                  <DateTimePicker
+                    value={editScheduledAt}
+                    mode="date"
+                    minimumDate={new Date()}
+                    onChange={handleEditDateChange}
+                    display="default"
+                  />
+                )}
+                {showEditPicker && Platform.OS === 'android' && editAndroidPickerStep === 'time' && (
+                  <DateTimePicker
+                    value={editScheduledAt}
+                    mode="time"
+                    onChange={handleEditDateChange}
+                    display="default"
                   />
                 )}
               </>
