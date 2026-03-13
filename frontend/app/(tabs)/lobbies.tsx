@@ -54,6 +54,7 @@ function getCampusColor(campus: string): string {
 }
 
 const SPORT_OPTIONS = ['Basketball', 'Soccer', 'Volleyball', 'Tennis', 'Other'] as const;
+type TimeFilter = 'any' | 'upcoming' | 'past';
 
 export default function LobbiesScreen() {
   const router = useRouter();
@@ -80,6 +81,10 @@ export default function LobbiesScreen() {
   const [showPicker, setShowPicker] = useState(false);
   const [androidPickerStep, setAndroidPickerStep] = useState<'date' | 'time' | null>(null);
   const [locationPickerOpen, setLocationPickerOpen] = useState(false);
+  const [sportFilter, setSportFilter] = useState<string | 'ALL'>('ALL');
+  const [campusFilter, setCampusFilter] = useState<string | 'ALL'>('ALL');
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>('any');
+  const [openFilter, setOpenFilter] = useState<'sport' | 'campus' | 'time' | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -221,6 +226,21 @@ export default function LobbiesScreen() {
     ? locations.find((loc) => loc.location_id === locationId)
     : null;
 
+  const filteredLobbies = useMemo(() => {
+    const now = new Date();
+    return lobbies.filter((lobby) => {
+      if (sportFilter !== 'ALL' && lobby.sport !== sportFilter) return false;
+      if (campusFilter !== 'ALL' && lobby.campus !== campusFilter) return false;
+      if (timeFilter === 'upcoming') {
+        return new Date(lobby.scheduled_start_time).getTime() >= now.getTime();
+      }
+      if (timeFilter === 'past') {
+        return new Date(lobby.scheduled_start_time).getTime() < now.getTime();
+      }
+      return true;
+    });
+  }, [lobbies, sportFilter, campusFilter, timeFilter]);
+
   const handleCreateLobby = async () => {
     setCreateError(null);
 
@@ -313,6 +333,129 @@ export default function LobbiesScreen() {
           </TouchableOpacity>
         </View>
 
+        <View style={styles.filterSection}>
+          <View style={styles.filterHeaderRow}>
+            <Text style={styles.filterLabel}>Filters</Text>
+            <TouchableOpacity
+              style={styles.addFilterButton}
+              onPress={() =>
+                setOpenFilter((prev) => (prev ? null : 'sport'))
+              }
+              activeOpacity={0.85}
+            >
+              <Text style={styles.addFilterText}>+ Add filter</Text>
+            </TouchableOpacity>
+          </View>
+
+          {(sportFilter !== 'ALL' || campusFilter !== 'ALL' || timeFilter !== 'any') && (
+            <View style={styles.activeFiltersRow}>
+              {sportFilter !== 'ALL' && (
+                <TouchableOpacity
+                  style={styles.activeFilterChip}
+                  onPress={() => setSportFilter('ALL')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.activeFilterText}>Sport: {sportFilter} ✕</Text>
+                </TouchableOpacity>
+              )}
+              {campusFilter !== 'ALL' && (
+                <TouchableOpacity
+                  style={styles.activeFilterChip}
+                  onPress={() => setCampusFilter('ALL')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.activeFilterText}>Campus: {campusFilter} ✕</Text>
+                </TouchableOpacity>
+              )}
+              {timeFilter !== 'any' && (
+                <TouchableOpacity
+                  style={styles.activeFilterChip}
+                  onPress={() => setTimeFilter('any')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.activeFilterText}>
+                    Time: {timeFilter === 'upcoming' ? 'Upcoming' : 'Past'} ✕
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
+          {openFilter && (
+            <View style={styles.filterOptionsPanel}>
+              <Text style={styles.filterPanelTitle}>Choose a filter</Text>
+
+              <Text style={styles.filterPanelCategory}>Sport</Text>
+              <View style={styles.filterPanelRow}>
+                {SPORT_OPTIONS.map((option) => (
+                  <TouchableOpacity
+                    key={option}
+                    style={styles.filterOption}
+                    onPress={() => setSportFilter(option)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.filterOptionText}>{option}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.filterPanelCategory}>Campus</Text>
+              <View style={styles.filterPanelRow}>
+                {Object.keys(CAMPUS_COLORS).map((campus) => (
+                  <TouchableOpacity
+                    key={campus}
+                    style={styles.filterOption}
+                    onPress={() => setCampusFilter(campus)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.filterOptionText}>{campus}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.filterPanelCategory}>Time</Text>
+              <View style={styles.filterPanelRow}>
+                <TouchableOpacity
+                  style={styles.filterOption}
+                  onPress={() => setTimeFilter('upcoming')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.filterOptionText}>Upcoming only</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.filterOption}
+                  onPress={() => setTimeFilter('past')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.filterOptionText}>Past only</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.filterPanelActions}>
+                <TouchableOpacity
+                  style={styles.clearFiltersButton}
+                  onPress={() => {
+                    setSportFilter('ALL');
+                    setCampusFilter('ALL');
+                    setTimeFilter('any');
+                    setOpenFilter(null);
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.clearFiltersText}>Clear all</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.doneFiltersButton}
+                  onPress={() => setOpenFilter(null)}
+                  activeOpacity={0.9}
+                >
+                  <Text style={styles.doneFiltersText}>Done</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
+
         {loading ? (
           <View style={styles.center}>
             <ActivityIndicator size="large" color="#CC0033" />
@@ -322,7 +465,7 @@ export default function LobbiesScreen() {
           <View style={styles.center}>
             <Text style={styles.errorText}>{error}</Text>
           </View>
-        ) : lobbies.length === 0 ? (
+        ) : filteredLobbies.length === 0 ? (
           <View style={styles.center}>
             <Text style={styles.emptyTitle}>No lobbies yet</Text>
             <Text style={styles.mutedText}>
@@ -331,7 +474,7 @@ export default function LobbiesScreen() {
           </View>
         ) : (
           <ScrollView contentContainerStyle={styles.listContent}>
-            {lobbies.map((lobby) => {
+            {filteredLobbies.map((lobby) => {
               const loc = locationForLobby(lobby);
               const when = new Date(lobby.scheduled_start_time);
               const whenLabel = when.toLocaleString(undefined, {
@@ -644,6 +787,125 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 24,
     backgroundColor: RUTGERS_RED,
+  },
+  filterSection: {
+    marginBottom: 16,
+    borderRadius: 16,
+    backgroundColor: 'rgba(15,23,42,0.18)',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  filterHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  filterLabel: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  addFilterButton: {
+    borderRadius: 999,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  addFilterText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: DARK_NAVY,
+  },
+  activeFiltersRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 6,
+  },
+  activeFilterChip: {
+    borderRadius: 999,
+    backgroundColor: 'rgba(249,250,251,0.18)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  activeFilterText: {
+    fontSize: 12,
+    color: '#E5E7EB',
+  },
+  filterOptionsPanel: {
+    marginTop: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(15,23,42,0.95)',
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  filterPanelTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#F9FAFB',
+    marginBottom: 4,
+  },
+  filterPanelCategory: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#E5E7EB',
+    marginTop: 4,
+    marginBottom: 2,
+  },
+  filterPanelRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  filterButton: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.6)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(15,23,42,0.65)',
+  },
+  filterButtonText: {
+    fontSize: 13,
+    color: '#E5E7EB',
+  },
+  filterOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  filterOptionText: {
+    fontSize: 13,
+    color: '#F9FAFB',
+  },
+  filterPanelActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 6,
+  },
+  clearFiltersButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.6)',
+  },
+  clearFiltersText: {
+    fontSize: 12,
+    color: '#E5E7EB',
+  },
+  doneFiltersButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#FFFFFF',
+  },
+  doneFiltersText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: DARK_NAVY,
   },
   headerRow: {
     flexDirection: 'row',
