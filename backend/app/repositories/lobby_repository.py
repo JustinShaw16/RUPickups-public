@@ -26,12 +26,17 @@ def _normalize_uuid(s: str) -> str:
 
 def get_upcoming_lobbies_for_user(user_id: str):
     """
-    Return upcoming lobbies for the current user.
+    Return "upcoming" lobbies for the current user.
+
+    Business rule (per app UX):
+    - A lobby is considered "upcoming" if its status is "open",
+      regardless of whether the scheduled_start_time is in the past
+      or future.
+
     1. Match current user's user_id to player_id in lobby_participants → get lobby_ids.
     2. Fetch full lobby rows for those lobby_ids.
-    3. Filter to future start times and return.
+    3. Filter to rows where status == "open" and return.
     """
-    from datetime import datetime, timezone
 
     db = get_supabase_admin_client()
     if db is None:
@@ -39,7 +44,6 @@ def get_upcoming_lobbies_for_user(user_id: str):
             "SUPABASE_SERVICE_ROLE_KEY is required for /lobbies/my/upcoming. "
             "Set it in backend .env to read lobby participants."
         )
-    now_dt = datetime.now(timezone.utc)
     current_user_id = str(user_id).strip()
     current_user_id_normalized = _normalize_uuid(current_user_id)
 
@@ -74,25 +78,14 @@ def get_upcoming_lobbies_for_user(user_id: str):
         .execute()
     )
     all_rows = lobbies_resp.data or []
-    rows = []
-    for r in all_rows:
-        scheduled = r.get("scheduled_start_time")
-        if not scheduled:
-            continue
-        try:
-            # Compare as datetime; accept both ISO strings and timestamps
-            if isinstance(scheduled, str):
-                start_dt = datetime.fromisoformat(scheduled.replace("Z", "+00:00"))
-            else:
-                start_dt = scheduled
-            if start_dt.tzinfo is None:
-                start_dt = start_dt.replace(tzinfo=timezone.utc)
-            if start_dt >= now_dt:
-                rows.append(r)
-        except (TypeError, ValueError):
-            continue
+    # Only keep lobbies whose status is "open" (case-insensitive)
+    rows = [
+        r
+        for r in all_rows
+        if str(r.get("status", "")).lower() == "open"
+    ]
 
-    # Sort by scheduled_start_time
+    # Sort by scheduled_start_time (if present) for a sensible order
     rows.sort(key=lambda r: r.get("scheduled_start_time") or "")
 
     # Add participant_count and backfill lobby_name
