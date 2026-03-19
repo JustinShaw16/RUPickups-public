@@ -1,6 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -12,6 +12,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 
 import { authedFetch } from '@/api/backend';
 import { supabase } from '@/api/supabase';
@@ -71,10 +72,8 @@ export default function ViewProfileScreen() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let mounted = true;
-
-    const load = async () => {
+  const loadProfile = useCallback(
+    async (isActive: () => boolean) => {
       setLoading(true);
       setError(null);
 
@@ -88,7 +87,7 @@ export default function ViewProfileScreen() {
           }
 
           if (res.status === 404) {
-            setError('No profile found.');
+            if (isActive()) setError('No profile found.');
             return;
           }
 
@@ -96,7 +95,7 @@ export default function ViewProfileScreen() {
         }
 
         const data = (await res.json()) as User;
-        if (mounted) setUser(data);
+        if (isActive()) setUser(data);
       } catch (e) {
         const msg = String(e || '');
 
@@ -105,20 +104,28 @@ export default function ViewProfileScreen() {
           return;
         }
 
-        if (mounted) {
+        if (isActive()) {
           setError('We could not load your profile right now.');
         }
       } finally {
-        if (mounted) setLoading(false);
+        if (isActive()) setLoading(false);
       }
-    };
+    },
+    [router]
+  );
 
-    void load();
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      const isActive = () => active;
 
-    return () => {
-      mounted = false;
-    };
-  }, [router]);
+      void loadProfile(isActive);
+
+      return () => {
+        active = false;
+      };
+    }, [loadProfile])
+  );
 
   // winRate 
   const winRate = useMemo(() => {

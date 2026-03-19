@@ -192,7 +192,7 @@ export default function EditProfileScreen() {
         return
       }
 
-      router.replace('/view-profile')
+      router.back()
     } catch {
       Alert.alert('Save failed', 'Please try again.')
     } finally {
