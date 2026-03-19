@@ -24,6 +24,16 @@ def read_me(user_id: str = Depends(require_user_id)):
         )
     return user
 
+@router.get("/{user_id}", response_model=UserResponse)
+def read_user(user_id: str, _: str = Depends(require_user_id)):
+    user = users_service.get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User profile not found"
+        )
+    return user
+
 @router.post("/me", response_model=UserResponse)
 def upsert_me(payload: UserCreate, user_id: str = Depends(require_user_id)):
     return users_service.upsert_user(user_id=user_id, payload=payload)

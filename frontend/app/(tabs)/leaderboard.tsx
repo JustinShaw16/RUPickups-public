@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Pressable,
   RefreshControl,
   SafeAreaView,
   ScrollView,
@@ -9,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useRouter } from 'expo-router';
 
 import { API_BASE_URL } from '@/api/backend';
 
@@ -59,6 +61,7 @@ function RankBadge({ rank }: { rank: number }) {
 }
 
 export default function LeaderboardScreen() {
+  const router = useRouter();
   const [users, setUsers] = useState<LeaderboardUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -146,12 +149,27 @@ export default function LeaderboardScreen() {
                 <View key={user.user_id} style={styles.card}>
                   <View style={styles.cardLeft}>
                     <RankBadge rank={rank} />
-                    <View style={styles.cardInfo}>
-                      <Text style={styles.cardName}>{user.username}</Text>
-                      <Text style={styles.cardStats}>
-                        {user.wins} W · {user.losses} L
-                      </Text>
-                    </View>
+                    <Pressable
+                      onPress={() => router.push(`/player-profile/${user.user_id}`)}
+                      style={({ pressed }) => [
+                        styles.playerLink,
+                        pressed && styles.playerLinkPressed,
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`View ${user.username}'s profile`}
+                    >
+                      <View style={styles.playerAvatar}>
+                        <Text style={styles.playerAvatarText}>
+                          {(user.username || '?').charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={styles.cardInfo}>
+                        <Text style={styles.cardName}>{user.username}</Text>
+                        <Text style={styles.cardStats}>
+                          {user.wins} W · {user.losses} L
+                        </Text>
+                      </View>
+                    </Pressable>
                   </View>
                   <View style={styles.eloWrap}>
                     <Text style={styles.eloLabel}>ELO</Text>
@@ -250,6 +268,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+  },
+  playerLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  playerLinkPressed: {
+    opacity: 0.75,
+  },
+  playerAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: RUTGERS_RED,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  playerAvatarText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#fff',
   },
   rankBadge: {
     width: 44,

@@ -517,31 +517,41 @@ export default function LobbyDetailScreen() {
                 ) : (
                   participants.map((p) => (
                     <View key={p.player_id} style={styles.participantRow}>
-                      <View style={styles.participantAvatar}>
-                        <Text style={styles.participantAvatarText}>
-                          {(p.username || '?').charAt(0).toUpperCase()}
-                        </Text>
-                      </View>
-                      <View style={styles.participantInfo}>
-                        <View style={styles.participantNameRow}>
-                          <Text style={styles.participantName}>{p.username}</Text>
-                          {lobby && p.player_id === lobby.host_user_id && (
-                            <MaterialCommunityIcons
-                              name="crown"
-                              size={18}
-                              color={RUTGERS_RED}
-                              style={styles.hostIcon}
-                            />
-                          )}
-                        </View>
-                        {(p.current_team || p.is_ready) && (
-                          <Text style={styles.participantMeta}>
-                            {[p.current_team, p.is_ready ? 'Ready' : null]
-                              .filter(Boolean)
-                              .join(' · ')}
+                      <Pressable
+                        onPress={() => router.push(`/player-profile/${p.player_id}`)}
+                        style={({ pressed }) => [
+                          styles.participantProfileTrigger,
+                          pressed && styles.participantProfileTriggerPressed,
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`View ${p.username}'s profile`}
+                      >
+                        <View style={styles.participantAvatar}>
+                          <Text style={styles.participantAvatarText}>
+                            {(p.username || '?').charAt(0).toUpperCase()}
                           </Text>
-                        )}
-                      </View>
+                        </View>
+                        <View style={styles.participantInfo}>
+                          <View style={styles.participantNameRow}>
+                            <Text style={styles.participantName}>{p.username}</Text>
+                            {lobby && p.player_id === lobby.host_user_id && (
+                              <MaterialCommunityIcons
+                                name="crown"
+                                size={18}
+                                color={RUTGERS_RED}
+                                style={styles.hostIcon}
+                              />
+                            )}
+                          </View>
+                        </View>
+                      </Pressable>
+                      {(p.current_team || p.is_ready) && (
+                        <Text style={styles.participantMeta}>
+                          {[p.current_team, p.is_ready ? 'Ready' : null]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </Text>
+                      )}
                     </View>
                   ))
                 )}
@@ -946,12 +956,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   participantRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: BORDER_GRAY,
+  },
+  participantProfileTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  participantProfileTriggerPressed: {
+    opacity: 0.75,
   },
   participantAvatar: {
     width: 40,
@@ -986,7 +1001,8 @@ const styles = StyleSheet.create({
   participantMeta: {
     fontSize: 13,
     color: MUTED_TEXT,
-    marginTop: 2,
+    marginTop: 4,
+    marginLeft: 52,
   },
   hostActionsRow: {
     flexDirection: 'row',
