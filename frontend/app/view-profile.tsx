@@ -278,9 +278,7 @@ export default function ViewProfileScreen() {
                         styles.secondaryButton,
                         pressed && styles.buttonPressed,
                       ]}
-                      onPress={() =>
-                        Alert.alert('Edit profile', 'Edit profile can be connected next.')
-                      }
+                      onPress={() => router.push('/edit-profile')}
                       accessibilityRole="button"
                       accessibilityLabel="Edit profile"
                     >
