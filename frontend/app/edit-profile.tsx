@@ -270,14 +270,25 @@ export default function EditProfileScreen() {
               </View>
               <Text style={styles.stateTitle}>Unable to edit profile</Text>
               <Text style={styles.stateText}>{loadError}</Text>
-              <Pressable
-                onPress={() => router.replace('/complete-profile')}
-                style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
-                accessibilityRole="button"
-                accessibilityLabel="Go to complete profile"
-              >
-                <Text style={styles.primaryButtonText}>Complete Profile</Text>
-              </Pressable>
+              {typeof loadError === 'string' && /404|not found/i.test(loadError) ? (
+                <Pressable
+                  onPress={() => router.replace('/complete-profile')}
+                  style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Go to complete profile"
+                >
+                  <Text style={styles.primaryButtonText}>Complete Profile</Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  onPress={() => router.replace('/edit-profile')}
+                  style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Retry loading profile"
+                >
+                  <Text style={styles.primaryButtonText}>Retry</Text>
+                </Pressable>
+              )}
             </View>
           ) : (
             <View style={styles.formCard}>
