@@ -543,15 +543,15 @@ export default function LobbyDetailScreen() {
                               />
                             )}
                           </View>
+                          {(p.current_team || p.is_ready) && (
+                            <Text style={styles.participantMeta}>
+                              {[p.current_team, p.is_ready ? 'Ready' : null]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </Text>
+                          )}
                         </View>
                       </Pressable>
-                      {(p.current_team || p.is_ready) && (
-                        <Text style={styles.participantMeta}>
-                          {[p.current_team, p.is_ready ? 'Ready' : null]
-                            .filter(Boolean)
-                            .join(' · ')}
-                        </Text>
-                      )}
                     </View>
                   ))
                 )}
@@ -1001,8 +1001,7 @@ const styles = StyleSheet.create({
   participantMeta: {
     fontSize: 13,
     color: MUTED_TEXT,
-    marginTop: 4,
-    marginLeft: 52,
+    marginTop: 2,
   },
   hostActionsRow: {
     flexDirection: 'row',

@@ -1,16 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.auth import require_user_id
-from app.models.users import UserCreate, UserResponse
+from app.models.users import PublicUserResponse, UserCreate, UserResponse
 from app.services import users_service
 
 router = APIRouter()
 
-@router.get("/", response_model=list[UserResponse])
+@router.get("/", response_model=list[PublicUserResponse])
 def read_users():
     return users_service.get_users()
 
-@router.get("/leaderboard", response_model=list[UserResponse])
+@router.get("/leaderboard", response_model=list[PublicUserResponse])
 def read_leaderboard(limit: int = 10):
     return users_service.get_leaderboard(limit=min(limit, 50))
 
@@ -24,7 +24,7 @@ def read_me(user_id: str = Depends(require_user_id)):
         )
     return user
 
-@router.get("/{user_id}", response_model=UserResponse)
+@router.get("/{user_id}", response_model=PublicUserResponse)
 def read_user(user_id: str, _: str = Depends(require_user_id)):
     user = users_service.get_user_by_id(user_id)
     if not user:

@@ -1,6 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 
 import { authedFetch } from '@/api/backend';
+import { InfoRow, profilePalette } from '@/components/profile/profile-ui';
 
 type User = {
   user_id: string;
@@ -23,39 +24,7 @@ type User = {
   losses: number;
 };
 
-const palette = {
-  page: '#CC0033',
-  card: '#FFFFFF',
-  softCard: '#FFF3F7',
-  border: '#F1CCD8',
-  accent: '#CC0033',
-  accentDark: '#AA0029',
-  text: '#3B1F28',
-  muted: '#7A5A65',
-  chipBg: '#FFE3EB',
-};
-
-function InfoRow({
-  label,
-  value,
-  icon,
-}: {
-  label: string;
-  value: string;
-  icon: keyof typeof MaterialIcons.glyphMap;
-}) {
-  return (
-    <View style={styles.infoRow}>
-      <View style={styles.infoIconWrap}>
-        <MaterialIcons name={icon} size={18} color={palette.accent} />
-      </View>
-      <View style={styles.infoTextWrap}>
-        <Text style={styles.infoLabel}>{label}</Text>
-        <Text style={styles.infoValue}>{value}</Text>
-      </View>
-    </View>
-  );
-}
+const palette = profilePalette;
 
 export default function PlayerProfileScreen() {
   const { userId } = useLocalSearchParams<{ userId?: string }>();
@@ -67,6 +36,7 @@ export default function PlayerProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isNotFound, setIsNotFound] = useState(false);
+  const mountedRef = useRef(true);
 
   const loadProfile = useCallback(
     async (isActive: () => boolean) => {
@@ -131,13 +101,13 @@ export default function PlayerProfileScreen() {
   );
 
   useEffect(() => {
-    let active = true;
-    const isActive = () => active;
+    mountedRef.current = true;
+    const isActive = () => mountedRef.current;
 
     void loadProfile(isActive);
 
     return () => {
-      active = false;
+      mountedRef.current = false;
     };
   }, [loadProfile]);
 
@@ -206,7 +176,7 @@ export default function PlayerProfileScreen() {
                 </Pressable>
                 <Pressable
                   onPress={() => {
-                    const isActive = () => true;
+                    const isActive = () => mountedRef.current;
                     void loadProfile(isActive);
                   }}
                   style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
@@ -233,11 +203,17 @@ export default function PlayerProfileScreen() {
 
                   <View style={styles.profileDetailsCard}>
                     <Text style={styles.sectionTitle}>Account Information</Text>
-                    <InfoRow label="Username" value={user.username || '—'} icon="badge" />
+                    <InfoRow
+                      label="Username"
+                      value={user.username || '—'}
+                      icon="badge"
+                      styles={styles}
+                    />
                     <InfoRow
                       label="Preferred Campus"
                       value={user.preferred_campus ?? 'Not set'}
                       icon="location-city"
+                      styles={styles}
                     />
                   </View>
 

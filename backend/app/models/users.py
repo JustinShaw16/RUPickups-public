@@ -20,3 +20,12 @@ class UserResponse(BaseModel):
     wins: int
     losses: int
     created_at: datetime
+
+
+class PublicUserResponse(BaseModel):
+    user_id: UUID
+    username: str
+    preferred_campus: Optional[str] = None
+    elo: int
+    wins: int
+    losses: int
