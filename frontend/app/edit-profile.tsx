@@ -93,9 +93,15 @@ export default function EditProfileScreen() {
 
         const data = (await res.json()) as UserMe
 
+        const rawCampus = data.preferred_campus ?? null
+        const normalizedCampus: CampusOption | '' =
+          rawCampus && CAMPUS_OPTIONS.includes(rawCampus as CampusOption)
+            ? (rawCampus as CampusOption)
+            : ''
+
         const nextInitial = {
           username: data.username ?? '',
-          preferredCampus: (data.preferred_campus as CampusOption | null) ?? '',
+          preferredCampus: normalizedCampus,
           phoneNumber: data.phone_number ?? '',
         }
 
