@@ -1,6 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons'
 import { useRouter } from 'expo-router'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -52,6 +52,7 @@ export default function EditProfileScreen() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [isNotFound, setIsNotFound] = useState(false)
 
   const [initial, setInitial] = useState<{
     username: string
@@ -67,12 +68,11 @@ export default function EditProfileScreen() {
   const [campusError, setCampusError] = useState('')
   const [phoneError, setPhoneError] = useState('')
 
-  useEffect(() => {
-    let mounted = true
-
-    const load = async () => {
+  const loadProfile = useCallback(
+    async (isActive: () => boolean) => {
       setLoading(true)
       setLoadError(null)
+      setIsNotFound(false)
 
       try {
         const res = await authedFetch('/users/me')
@@ -84,7 +84,10 @@ export default function EditProfileScreen() {
           }
 
           if (res.status === 404) {
-            setLoadError('No profile found yet. Please complete your profile first.')
+            if (isActive()) {
+              setIsNotFound(true)
+              setLoadError('No profile found yet. Please complete your profile first.')
+            }
             return
           }
 
@@ -105,7 +108,7 @@ export default function EditProfileScreen() {
           phoneNumber: data.phone_number ?? '',
         }
 
-        if (!mounted) return
+        if (!isActive()) return
         setInitial(nextInitial)
         setUsername(nextInitial.username)
         setPreferredCampus(nextInitial.preferredCampus)
@@ -116,18 +119,24 @@ export default function EditProfileScreen() {
           router.replace('/login')
           return
         }
-        if (mounted) setLoadError('We could not load your profile right now.')
+        if (isActive()) setLoadError('We could not load your profile right now.')
       } finally {
-        if (mounted) setLoading(false)
+        if (isActive()) setLoading(false)
       }
-    }
+    },
+    [router]
+  )
 
-    void load()
+  useEffect(() => {
+    let active = true
+    const isActive = () => active
+
+    void loadProfile(isActive)
 
     return () => {
-      mounted = false
+      active = false
     }
-  }, [router])
+  }, [loadProfile])
 
   const isDirty = useMemo(() => {
     if (!initial) return false
@@ -276,7 +285,7 @@ export default function EditProfileScreen() {
               </View>
               <Text style={styles.stateTitle}>Unable to edit profile</Text>
               <Text style={styles.stateText}>{loadError}</Text>
-              {typeof loadError === 'string' && /404|not found/i.test(loadError) ? (
+              {isNotFound ? (
                 <Pressable
                   onPress={() => router.replace('/complete-profile')}
                   style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
@@ -287,7 +296,10 @@ export default function EditProfileScreen() {
                 </Pressable>
               ) : (
                 <Pressable
-                  onPress={() => router.replace('/edit-profile')}
+                  onPress={() => {
+                    const isActive = () => true
+                    void loadProfile(isActive)
+                  }}
                   style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
                   accessibilityRole="button"
                   accessibilityLabel="Retry loading profile"
