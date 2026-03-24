@@ -37,6 +37,7 @@ type Lobby = {
   status: string;
   scheduled_start_time: string;
   created_at: string;
+  participant_average_elo?: number | null;
 };
 
 type Location = {
@@ -63,6 +64,8 @@ const DARK_NAVY = '#111827';
 const LIGHT_GRAY = '#F9FAFB';
 const BORDER_GRAY = '#E5E7EB';
 const MUTED_TEXT = '#6B7280';
+/** Display-only floor for lobby ELO (not enforced server-side yet). */
+const MIN_LOBBY_ELO = 0;
 
 export default function LobbyDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -504,9 +507,17 @@ export default function LobbyDetailScreen() {
                     {lobby.status.charAt(0).toUpperCase() + lobby.status.slice(1)}
                   </Text>
                 </View>
-                <Text style={styles.metaText}>
-                  {lobby.max_players} players max · {lobby.is_public ? 'Public' : 'Private'}
-                </Text>
+                <View style={styles.metaRightCol}>
+                  {lobby.participant_average_elo != null ? (
+                    <Text style={styles.metaText}>
+                      Avg ELO {Math.round(lobby.participant_average_elo)}
+                    </Text>
+                  ) : null}
+                  <Text style={styles.metaText}>
+                    {lobby.max_players} players max · {lobby.is_public ? 'Public' : 'Private'} · Min ELO{' '}
+                    {MIN_LOBBY_ELO}
+                  </Text>
+                </View>
               </View>
             </View>
 
@@ -936,8 +947,8 @@ const styles = StyleSheet.create({
   },
   metaRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
+    alignItems: 'flex-end',
+    flexWrap: 'nowrap',
     gap: 10,
     marginTop: 8,
   },
@@ -958,6 +969,13 @@ const styles = StyleSheet.create({
   metaText: {
     fontSize: 13,
     color: MUTED_TEXT,
+    textAlign: 'right',
+  },
+  metaRightCol: {
+    flex: 1,
+    alignItems: 'flex-end',
+    minWidth: 0,
+    gap: 4,
   },
   section: {
     marginBottom: 24,

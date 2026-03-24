@@ -39,6 +39,7 @@ class LobbyResponse(BaseModel):
     scheduled_start_time: datetime
     created_at: datetime
     participant_count: int | None = None
+    participant_average_elo: float | None = None
 
     class Config:
         from_attributes = True

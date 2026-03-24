@@ -19,6 +19,7 @@ import DateTimePicker, {
 
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import { API_BASE_URL, authedFetch } from '@/api/backend';
 
@@ -35,6 +36,7 @@ type Lobby = {
   scheduled_start_time: string;
   created_at: string;
   participant_count?: number | null;
+  participant_average_elo?: number | null;
 };
 
 type Location = {
@@ -537,15 +539,31 @@ export default function LobbiesScreen() {
                     </View>
                   </View>
 
-                  <Text style={styles.lobbySubTitle}>{campusForLobby(lobby)}</Text>
-                  {loc ? <Text style={styles.locationText}>{loc.name}</Text> : null}
+                  <View style={styles.infoRow}>
+                    <MaterialIcons name="schedule" size={18} color={MUTED_TEXT} />
+                    <Text style={styles.infoText}>{whenLabel}</Text>
+                  </View>
+                  <View style={styles.infoRow}>
+                    <MaterialIcons name="place" size={18} color={MUTED_TEXT} />
+                    <Text style={styles.infoText}>
+                      {campusForLobby(lobby)}
+                      {loc ? ` · ${loc.name}` : ''}
+                    </Text>
+                  </View>
 
                   <View style={styles.metaRow}>
-                    <Text style={styles.metaText}>{whenLabel}</Text>
-                    <Text style={styles.metaText}>
-                      {lobby.is_public ? 'Public' : 'Private'} ·{' '}
-                      {(lobby.participant_count ?? 0)}/{lobby.max_players} players
-                    </Text>
+                    <View style={styles.metaRightCol}>
+                      {lobby.participant_average_elo != null ? (
+                        <Text style={styles.metaText}>
+                          Avg ELO {Math.round(lobby.participant_average_elo)}
+                        </Text>
+                      ) : null}
+                      <Text style={styles.metaText}>
+                        {lobby.is_public ? 'Public' : 'Private'} ·{' '}
+                        {(lobby.participant_count ?? 0)}/{lobby.max_players} players · Min ELO{' '}
+                        {MIN_LOBBY_ELO}
+                      </Text>
+                    </View>
                   </View>
                 </Pressable>
               );
@@ -801,6 +819,8 @@ const DARK_NAVY = '#111827';
 const LIGHT_GRAY = '#F9FAFB';
 const BORDER_GRAY = '#E5E7EB';
 const MUTED_TEXT = '#6B7280';
+/** Display-only floor for lobby ELO (not enforced server-side yet). */
+const MIN_LOBBY_ELO = 0;
 
 const styles = StyleSheet.create({
   safeArea: {
@@ -1030,24 +1050,32 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: MUTED_TEXT,
   },
-  lobbySubTitle: {
-    fontSize: 14,
-    color: MUTED_TEXT,
-    marginBottom: 4,
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
   },
-  locationText: {
-    fontSize: 14,
+  infoText: {
+    fontSize: 15,
     color: DARK_NAVY,
-    marginBottom: 8,
+    flex: 1,
   },
   metaRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 4,
+    justifyContent: 'flex-end',
+    alignItems: 'flex-end',
+    marginTop: 0,
+  },
+  metaRightCol: {
+    alignItems: 'flex-end',
+    flexShrink: 0,
+    gap: 4,
   },
   metaText: {
     fontSize: 13,
     color: MUTED_TEXT,
+    textAlign: 'right',
   },
   statusPill: {
     paddingHorizontal: 10,

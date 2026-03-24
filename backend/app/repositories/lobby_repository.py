@@ -3,6 +3,32 @@ from uuid import UUID
 from app.db.supabase_client import get_supabase_client
 from app.db.supabase_admin_client import get_supabase_admin_client
 from app.models.lobby import LobbyCreate, LobbyUpdate
+from app.repositories import playerstats_repository
+
+
+def _enrich_lobby_row_with_participant_average_elo(row: dict) -> None:
+    """Average ELO across host + all lobby_participants (from player_stats)."""
+    db = get_supabase_client()
+    lobby_id = str(row["lobby_id"])
+    host_id = str(row.get("host_user_id") or "")
+    p_resp = (
+        db.table("lobby_participants")
+        .select("player_id")
+        .eq("lobby_id", lobby_id)
+        .execute()
+    )
+    players: set[str] = {str(r["player_id"]) for r in (p_resp.data or [])}
+    if host_id:
+        players.add(host_id)
+    if not players:
+        row["participant_average_elo"] = None
+        return
+    stats_map = playerstats_repository.get_aggregated_stats_map_by_user_ids(list(players))
+    elos: list[int] = []
+    for uid in players:
+        s = stats_map.get(uid, {"elo": playerstats_repository.DEFAULT_STARTING_ELO})
+        elos.append(int(s["elo"]))
+    row["participant_average_elo"] = round(sum(elos) / len(elos), 1)
 
 
 def get_lobby_by_id(lobby_id: UUID) -> dict | None:
@@ -13,6 +39,7 @@ def get_lobby_by_id(lobby_id: UUID) -> dict | None:
     row = response.data[0]
     if not isinstance(row.get("lobby_name"), str) or not str(row.get("lobby_name", "")).strip():
         row["lobby_name"] = f"{row.get('sport') or 'Pickup'} lobby"
+    _enrich_lobby_row_with_participant_average_elo(row)
     return row
 
 
@@ -175,6 +202,34 @@ def get_all_lobbies():
             count += 1
         row["participant_count"] = count
 
+    all_player_ids: set[str] = set()
+    for row in rows:
+        lobby_id = str(row.get("lobby_id") or "")
+        host_id = str(row.get("host_user_id") or "")
+        entry = participant_counts.get(lobby_id)
+        players_set = set(entry["players"]) if entry and isinstance(entry.get("players"), set) else set()
+        if host_id:
+            players_set.add(host_id)
+        all_player_ids.update(players_set)
+
+    stats_map = playerstats_repository.get_aggregated_stats_map_by_user_ids(list(all_player_ids))
+
+    for row in rows:
+        lobby_id = str(row.get("lobby_id") or "")
+        host_id = str(row.get("host_user_id") or "")
+        entry = participant_counts.get(lobby_id)
+        players_set = set(entry["players"]) if entry and isinstance(entry.get("players"), set) else set()
+        if host_id:
+            players_set.add(host_id)
+        if not players_set:
+            row["participant_average_elo"] = None
+            continue
+        elos: list[int] = []
+        for uid in players_set:
+            s = stats_map.get(uid, {"elo": playerstats_repository.DEFAULT_STARTING_ELO})
+            elos.append(int(s["elo"]))
+        row["participant_average_elo"] = round(sum(elos) / len(elos), 1)
+
     return rows
 
 
@@ -211,6 +266,7 @@ def create_lobby(*, host_user_id: str, payload: LobbyCreate) -> dict:
     except Exception:
         pass
 
+    _enrich_lobby_row_with_participant_average_elo(lobby_row)
     return lobby_row
 
 
@@ -241,7 +297,9 @@ def update_lobby(*, lobby_id: UUID, payload: LobbyUpdate) -> dict | None:
     )
     if not response.data or len(response.data) == 0:
         return None
-    return response.data[0]
+    updated = response.data[0]
+    _enrich_lobby_row_with_participant_average_elo(updated)
+    return updated
 
 
 def delete_lobby(*, lobby_id: UUID) -> None:
