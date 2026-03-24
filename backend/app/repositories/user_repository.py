@@ -1,7 +1,25 @@
-from fastapi import Depends, HTTPException, status
-
 from app.db.supabase_admin_client import get_supabase_admin_client
 from app.db.supabase_client import get_supabase_client
+
+from app.repositories import playerstats_repository
+
+
+def _merge_user_row_with_stats(user: dict, stats_map: dict[str, dict[str, int]]) -> dict:
+    uid = str(user["user_id"])
+    s = stats_map.get(
+        uid,
+        {
+            "elo": playerstats_repository.DEFAULT_STARTING_ELO,
+            "wins": 0,
+            "losses": 0,
+        },
+    )
+    merged = {**user}
+    merged["elo"] = s["elo"]
+    merged["wins"] = s["wins"]
+    merged["losses"] = s["losses"]
+    return merged
+
 
 def get_all_users():
     db = get_supabase_client()
@@ -13,22 +31,20 @@ def get_all_users():
         .execute()
     )
 
-    return response.data or []
+    rows = response.data or []
+    if not rows:
+        return []
+    user_ids = [str(r["user_id"]) for r in rows]
+    playerstats_repository.ensure_basketball_rows_for_user_ids(user_ids)
+    stats_map = playerstats_repository.get_aggregated_stats_map_by_user_ids(user_ids)
+    return [_merge_user_row_with_stats(r, stats_map) for r in rows]
 
 
 def get_leaderboard(limit: int = 10):
-    db = get_supabase_client()
+    users = get_all_users()
+    users.sort(key=lambda u: int(u.get("elo") or 0), reverse=True)
+    return users[:limit]
 
-    response = (
-        db
-        .table("users")
-        .select("*")
-        .order("elo", desc=True)
-        .limit(limit)
-        .execute()
-    )
-
-    return response.data or []
 
 def get_user_by_id(user_id: str):
     db = get_supabase_client()
@@ -40,8 +56,15 @@ def get_user_by_id(user_id: str):
         .execute()
     )
 
-    return response.data[0] if response.data else None
-    
+    if not response.data:
+        return None
+    user = response.data[0]
+    uid = str(user["user_id"])
+    playerstats_repository.ensure_basketball_rows_for_user_ids([uid])
+    stats_map = playerstats_repository.get_aggregated_stats_map_by_user_ids([uid])
+    return _merge_user_row_with_stats(user, stats_map)
+
+
 def upsert_user(user_id: str, username: str | None = None, preferred_campus: str | None = None, phone_number: str | None = None):
     admin_client = get_supabase_admin_client()
 
@@ -52,11 +75,11 @@ def upsert_user(user_id: str, username: str | None = None, preferred_campus: str
         "phone_number": phone_number
     }
 
-    response = (
+    (
         admin_client
         .table("users")
         .upsert(payload, on_conflict="user_id")
         .execute()
     )
-    
-    return response.data[0] if response.data else get_user_by_id(user_id)
+
+    return get_user_by_id(user_id)

@@ -1,15 +1,5 @@
-from uuid import UUID
+from app.repositories import playerstats_repository
 
-from app.db.supabase_client import get_supabase_client
 
 def get_player_stats() -> list[dict]:
-    db = get_supabase_client()
-
-    response = (
-        db
-        .table("player_stats")
-        .select("*")
-        .execute()
-    )
-    
-    return response.data or []
+    return playerstats_repository.get_all_player_stats()

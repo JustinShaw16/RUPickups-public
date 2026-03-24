@@ -66,15 +66,20 @@ create table if not exists public.users (
   preferred_campus text,
   phone_number text,
 
-  elo integer not null default 0,
-  wins integer not null default 0,
-  losses integer not null default 0,
+  -- Rating / record live in player_stats; leave these unset (NULL) for new users
+  elo integer,
+  wins integer,
+  losses integer,
 
   created_at timestamptz not null default now()
 );
 
 create or replace function public.handle_new_user()
-returns trigger as $$
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
 begin
   insert into public.users (user_id, username)
   values (
@@ -86,9 +91,13 @@ begin
   )
   on conflict (user_id) do nothing;
 
+  insert into public.player_stats (user_id, sport, elo, wins, losses)
+  values (new.id, 'Basketball', 400, 0, 0)
+  on conflict (user_id, sport) do nothing;
+
   return new;
 end;
-$$ language plpgsql security definer;
+$$;
 
 drop trigger if exists on_auth_user_created on auth.users;
 
@@ -168,7 +177,7 @@ create table if not exists public.player_stats (
   wins integer not null default 0 check (wins >= 0),
   losses integer not null default 0 check (losses >= 0),
   
-  elo integer not null default 0 check (elo >= 0),
+  elo integer not null default 400 check (elo >= 0),
   current_streak integer not null default 0 check (current_streak >= 0),
 
   created_at timestamptz not null default now(),
