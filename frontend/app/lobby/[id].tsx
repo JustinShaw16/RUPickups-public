@@ -167,6 +167,29 @@ export default function LobbyDetailScreen() {
     void loadAll();
   }, [loadAll]);
 
+  const readErrorDetail = async (res: Response): Promise<string> => {
+    const raw = await res.text().catch(() => '');
+    try {
+      const parsed = JSON.parse(raw) as { detail?: string };
+      if (typeof parsed.detail === 'string') return parsed.detail;
+    } catch {
+      /* not JSON */
+    }
+    return raw;
+  };
+
+  const showJoinConflict = (isFull: boolean, detail: string) => {
+    const title = isFull ? 'Lobby full' : 'Cannot join';
+    const message = isFull
+      ? 'Sorry, this lobby is full.'
+      : detail || 'Could not join this lobby.';
+    if (Platform.OS === 'web') {
+      window.alert(message);
+    } else {
+      Alert.alert(title, message);
+    }
+  };
+
   const handleJoin = async () => {
     if (!id || joining) return;
     setJoinError(null);
@@ -174,8 +197,10 @@ export default function LobbyDetailScreen() {
     try {
       const res = await authedFetch(`/lobbies/${id}/join`, { method: 'POST' });
       if (res.status === 409) {
-        setJoinError('You are already in this lobby.');
-        await loadParticipants();
+        const detail = await readErrorDetail(res);
+        const isFull = detail.toLowerCase().includes('full');
+        showJoinConflict(isFull, detail);
+        await Promise.all([loadParticipants(), loadLobby()]);
         return;
       }
       if (!res.ok) {
@@ -183,7 +208,7 @@ export default function LobbyDetailScreen() {
         setJoinError(msg || 'Failed to join lobby.');
         return;
       }
-      await loadParticipants();
+      await Promise.all([loadParticipants(), loadLobby()]);
     } catch (e) {
       setJoinError(e instanceof Error ? e.message : 'Failed to join lobby.');
     } finally {
@@ -223,6 +248,7 @@ export default function LobbyDetailScreen() {
     isHost ||
     (currentUserId != null &&
       participants.some((p) => p.player_id === currentUserId));
+  const isLobbyFull = !!lobby && participants.length >= lobby.max_players;
 
   const openEdit = useCallback(() => {
     if (!lobby) return;
@@ -499,11 +525,11 @@ export default function LobbyDetailScreen() {
                 <TouchableOpacity
                   style={[styles.joinButton, joining && styles.joinButtonDisabled]}
                   onPress={handleJoin}
-                  disabled={joining || lobby.status !== 'open'}
+                  disabled={joining || lobby.status !== 'open' || isLobbyFull}
                   activeOpacity={0.9}
                 >
                   <Text style={styles.joinButtonText}>
-                    {joining ? 'Joining…' : 'Join this lobby'}
+                    {joining ? 'Joining…' : isLobbyFull ? 'Lobby full' : 'Join this lobby'}
                   </Text>
                 </TouchableOpacity>
               )}

@@ -47,7 +47,12 @@ def join_lobby(lobby_id: UUID, user_id: str = Depends(require_user_id)):
     try:
         return lobby_service.join_lobby(lobby_id=lobby_id, user_id=user_id)
     except RuntimeError as e:
-        if "duplicate" in str(e).lower() or "unique" in str(e).lower():
+        err = str(e).lower()
+        if "lobby is full" in err:
+            raise HTTPException(status_code=409, detail="Lobby is full") from e
+        if "already in this lobby" in err:
+            raise HTTPException(status_code=409, detail="Already in this lobby") from e
+        if "duplicate" in err or "unique" in err:
             raise HTTPException(status_code=409, detail="Already in this lobby") from e
         raise HTTPException(status_code=400, detail=str(e)) from e
 

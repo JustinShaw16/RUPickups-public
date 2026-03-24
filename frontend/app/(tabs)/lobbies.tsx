@@ -44,13 +44,24 @@ type Location = {
 };
 
 const CAMPUS_COLORS: Record<string, string> = {
-  'College Avenue': '#CC0033',
+  'College Ave': '#CC0033',
   Busch: '#0054A4',
   Livingston: '#2E7D32',
   'Cook/Douglass': '#E65100',
 };
 function getCampusColor(campus: string): string {
   return CAMPUS_COLORS[campus] ?? '#6B7280';
+}
+
+function normalizeCampus(campus: string): string {
+  const compact = campus.trim().toLowerCase().replace(/[^a-z]/g, '');
+  if (compact === 'collegeavenue' || compact === 'collegeave' || compact === 'ca') {
+    return 'collegeave';
+  }
+  if (compact === 'cookdouglass' || compact === 'cookanddouglass' || compact === 'cd') {
+    return 'cookdouglass';
+  }
+  return compact;
 }
 
 const SPORT_OPTIONS = ['Basketball', 'Soccer', 'Volleyball', 'Tennis', 'Other'] as const;
@@ -222,6 +233,12 @@ export default function LobbiesScreen() {
   const locationForLobby = (lobby: Lobby): Location | undefined =>
     locations.find((loc) => loc.location_id === lobby.location_id);
 
+  const campusForLobby = (lobby: Lobby): string => {
+    const locationCampus = locationForLobby(lobby)?.campus?.trim();
+    if (locationCampus) return locationCampus;
+    return lobby.campus?.trim() ?? '';
+  };
+
   const selectedLocation = locationId
     ? locations.find((loc) => loc.location_id === locationId)
     : null;
@@ -230,7 +247,12 @@ export default function LobbiesScreen() {
     const now = new Date();
     return lobbies.filter((lobby) => {
       if (sportFilter !== 'ALL' && lobby.sport !== sportFilter) return false;
-      if (campusFilter !== 'ALL' && lobby.campus !== campusFilter) return false;
+      if (
+        campusFilter !== 'ALL' &&
+        normalizeCampus(campusForLobby(lobby)) !== normalizeCampus(campusFilter)
+      ) {
+        return false;
+      }
       if (timeFilter === 'upcoming') {
         return new Date(lobby.scheduled_start_time).getTime() >= now.getTime();
       }
@@ -239,7 +261,7 @@ export default function LobbiesScreen() {
       }
       return true;
     });
-  }, [lobbies, sportFilter, campusFilter, timeFilter]);
+  }, [lobbies, locations, sportFilter, campusFilter, timeFilter]);
 
   const handleCreateLobby = async () => {
     setCreateError(null);
@@ -512,7 +534,7 @@ export default function LobbiesScreen() {
                     </View>
                   </View>
 
-                  <Text style={styles.lobbySubTitle}>{lobby.campus}</Text>
+                  <Text style={styles.lobbySubTitle}>{campusForLobby(lobby)}</Text>
                   {loc ? <Text style={styles.locationText}>{loc.name}</Text> : null}
 
                   <View style={styles.metaRow}>

@@ -35,7 +35,28 @@ def delete_lobby(*, lobby_id: UUID, user_id: str) -> bool:
     return True
 
 
+def _player_id_key(player_id) -> str:
+    try:
+        return str(UUID(str(player_id).strip()))
+    except (TypeError, ValueError):
+        return str(player_id).strip()
+
+
 def join_lobby(*, lobby_id: UUID, user_id: str) -> dict:
+    lobby = lobby_repository.get_lobby_by_id(lobby_id)
+    if not lobby:
+        raise RuntimeError("Lobby not found")
+
+    participants = lobby_repository.get_participants_for_lobby(lobby_id)
+    user_key = _player_id_key(user_id)
+    for row in participants:
+        if _player_id_key(row.get("player_id")) == user_key:
+            raise RuntimeError("Already in this lobby")
+
+    max_players = int(lobby.get("max_players") or 0)
+    if max_players > 0 and len(participants) >= max_players:
+        raise RuntimeError("Lobby is full")
+
     return lobby_repository.join_lobby(lobby_id=lobby_id, player_id=user_id)
 
 
