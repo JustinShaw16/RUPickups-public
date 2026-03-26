@@ -1,0 +1,316 @@
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+
+import { authedFetch } from '@/api/backend';
+
+type Match = {
+  match_id: string;
+  lobby_id: string;
+  match_number: number;
+  status: string;
+  started_at: string | null;
+  ended_at: string | null;
+  winner_team: string | null;
+  created_at: string;
+};
+
+type Participant = {
+  player_id: string;
+  username: string;
+  is_ready: boolean;
+  current_team: string | null;
+};
+
+type Lobby = {
+  lobby_id: string;
+  max_players: number;
+};
+ 
+const RUTGERS_RED = '#CC0033';
+const DARK_NAVY = '#111827';
+const LIGHT_GRAY = '#F9FAFB';
+const BORDER_GRAY = '#E5E7EB';
+const MUTED_TEXT = '#6B7280';
+
+export default function MatchPage() {
+  const { id: matchId } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
+
+  const [match, setMatch] = useState<Match | null>(null);
+  const [players, setPlayers] = useState<Participant[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lobby, setLobby] = useState<Lobby | null>(null)
+  const [leaving, setLeaving] = useState(false);
+
+  const { teamASlots, teamBSlots } = useMemo(() => {
+    const max = Math.max(lobby?.max_players ?? 0, 0);
+        return {
+            teamASlots: Math.ceil(max / 2),
+            teamBSlots: Math.floor(max / 2),
+        };
+    }, [lobby?.max_players]);
+
+  const handleLeaveLobby = async () => {
+    if (leaving || !match?.lobby_id) return;
+    
+    setLeaving(true);
+    try {
+        const res = await authedFetch(`/lobbies/${match.lobby_id}/leave`, {
+        method: 'POST',
+        });
+    
+        if (!res.ok) {
+        const msg = await res.text().catch(() => '');
+        throw new Error(msg || 'Failed to leave lobby.');
+        }
+    
+        router.replace('/(tabs)/lobbies');
+    } catch (e) {
+        const message = e instanceof Error ? e.message : 'Failed to leave lobby.';
+        if (Platform.OS === 'web') {
+        window.alert(message);
+        } else {
+        Alert.alert('Leave Lobby', message);
+        }
+    } finally {
+        setLeaving(false);
+    }
+  };
+
+  const load = useCallback(async () => {
+    if (!matchId) {
+      setError('Missing match ID.');
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const matchRes = await authedFetch(`/matches/${matchId}`);
+      if (!matchRes.ok) {
+        throw new Error(`Failed to load match (${matchRes.status})`);
+      }
+
+      const matchData = (await matchRes.json()) as Match;
+      setMatch(matchData);
+
+      const [lobbyRes, participantsRes] = await Promise.all([
+        authedFetch(`/lobbies/${matchData.lobby_id}`),
+        authedFetch(`/lobbies/${matchData.lobby_id}/participants`),
+      ]);
+      if (lobbyRes.ok) {
+        const lobbyData = (await lobbyRes.json()) as Lobby;
+        setLobby(lobbyData);
+      } else {
+        setLobby(null);
+      }
+    
+      if (participantsRes.ok) {
+        const participantData = (await participantsRes.json()) as Participant[];
+        setPlayers(participantData);
+      } else {
+        setPlayers([]);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load match page.');
+    } finally {
+      setLoading(false);
+    }
+  }, [matchId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const onStartMatch = () => {
+    const message = 'Start match action is ready for next step.';
+    if (Platform.OS === 'web') {
+      window.alert(message);
+      return;
+    }
+    Alert.alert('Start Match', message);
+  };
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView contentContainerStyle={styles.container}>
+        <View style={styles.headerRow}>
+            <Text style={styles.title}>Match</Text>
+            <Pressable
+                onPress={() => void handleLeaveLobby()}
+                disabled={leaving}
+                style={({ pressed }) => [
+                styles.leaveButton,
+                pressed && styles.leaveButtonPressed,
+                leaving && styles.leaveButtonDisabled,
+                ]}
+            >
+                <Text style={styles.leaveButtonText}>
+                {leaving ? 'Leaving…' : 'Leave Lobby'}
+                </Text>
+            </Pressable>
+        </View>
+
+
+        {loading ? (
+          <View style={styles.center}>
+            <ActivityIndicator size="large" color="#FFFFFF" />
+            <Text style={styles.mutedOnRed}>Loading match...</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.center}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : (
+          <>
+            <Pressable onPress={onStartMatch} style={styles.startButton}>
+              <Text style={styles.startButtonText}>Start Match</Text>
+            </Pressable>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Players ({players.length})</Text>
+              <View style={styles.card}>
+                {players.length === 0 ? (
+                  <Text style={styles.emptyText}>No players found for this lobby.</Text>
+                ) : (
+                  players.map((p) => (
+                    <View key={p.player_id} style={styles.playerRow}>
+                      <View style={styles.avatar}>
+                        <Text style={styles.avatarText}>{p.username.charAt(0).toUpperCase()}</Text>
+                      </View>
+                      <Text style={styles.playerName}>{p.username}</Text>
+                    </View>
+                  ))
+                )}
+              </View>
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Teams</Text>
+              <View style={styles.card}>
+                <Text style={styles.teamTitle}>Team A</Text>
+                {Array.from({ length: teamASlots }).map((_, i) => (
+                  <View key={`a-${i}`} style={styles.slotRow}>
+                    <Text style={styles.slotText}>Slot {i + 1} · Empty</Text>
+                  </View>
+                ))}
+              </View>
+
+              <View style={[styles.card, { marginTop: 12 }]}>
+                <Text style={styles.teamTitle}>Team B</Text>
+                {Array.from({ length: teamBSlots }).map((_, i) => (
+                  <View key={`b-${i}`} style={styles.slotRow}>
+                    <Text style={styles.slotText}>Slot {i + 1} · Empty</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </>
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: RUTGERS_RED },
+  container: { padding: 20, paddingBottom: 28 },
+  backButton: { marginRight: 12, padding: 4 },
+  title: { fontSize: 26, fontWeight: '700', color: '#FFFFFF' },
+  center: { alignItems: 'center', justifyContent: 'center', minHeight: 220 },
+  mutedOnRed: { marginTop: 8, color: 'rgba(255,255,255,0.9)' },
+  errorText: { color: '#FEE2E2', textAlign: 'center' },
+
+  section: { marginBottom: 20 },
+  sectionTitle: { color: '#FFFFFF', fontSize: 16, fontWeight: '700', marginBottom: 10 },
+
+  card: {
+    backgroundColor: LIGHT_GRAY,
+    borderWidth: 1,
+    borderColor: BORDER_GRAY,
+    borderRadius: 16,
+    padding: 14,
+  },
+
+  matchMeta: { color: DARK_NAVY, fontSize: 14, marginBottom: 4 },
+
+  startButton: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  startButtonText: { color: RUTGERS_RED, fontSize: 16, fontWeight: '700' },
+
+  playerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER_GRAY,
+  },
+  avatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: RUTGERS_RED,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  avatarText: { color: '#FFFFFF', fontWeight: '700' },
+  playerName: { color: DARK_NAVY, fontSize: 15, fontWeight: '600' },
+
+  teamTitle: { color: DARK_NAVY, fontSize: 15, fontWeight: '700', marginBottom: 8 },
+  slotRow: {
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: BORDER_GRAY,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+  },
+  slotText: { color: MUTED_TEXT, fontSize: 14 },
+  emptyText: { color: MUTED_TEXT, fontSize: 14 },
+
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  leaveButton: {
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  leaveButtonPressed: {
+    opacity: 0.8,
+  },
+  leaveButtonDisabled: {
+    opacity: 0.6,
+  },
+  leaveButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+});

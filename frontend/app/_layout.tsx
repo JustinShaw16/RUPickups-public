@@ -100,7 +100,9 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack screenOptions={{ headerShown: false }} />
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="match" />
+        </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>
     </SafeAreaProvider>

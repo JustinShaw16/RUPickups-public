@@ -86,6 +86,7 @@ export default function LobbyDetailScreen() {
   const [editLocationPickerOpen, setEditLocationPickerOpen] = useState(false);
   const [showEditPicker, setShowEditPicker] = useState(false);
   const [editAndroidPickerStep, setEditAndroidPickerStep] = useState<'date' | 'time'>('date');
+  const [creatingMatch, setCreatingMatch] = useState(false);
 
   const loadLobby = useCallback(async () => {
     if (!id) return;
@@ -235,13 +236,36 @@ export default function LobbyDetailScreen() {
     }
   };
 
-  const handleCreateMatch = () => {
-    if (!lobby) return;
-    Alert.alert(
-      'Create match',
-      'Match creation from lobby participants is coming soon.',
-    );
+  const handleCreateMatch = async () => {
+    if (!id || creatingMatch) return;
+  
+    setCreatingMatch(true);
+    try {
+      const res = await authedFetch('/matches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lobby_id: id }),
+      });
+  
+      if (!res.ok) {
+        const msg = await res.text().catch(() => '');
+        throw new Error(msg || `Failed to create match (${res.status})`);
+      }
+  
+      const created = (await res.json()) as { match_id: string };
+      router.push({ pathname: '/match/[id]', params: { id: created.match_id } });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Failed to create match.';
+      if (Platform.OS === 'web') {
+        window.alert(message);
+      } else {
+        Alert.alert('Create match', message);
+      }
+    } finally {
+      setCreatingMatch(false);
+    }
   };
+
 
   const isHost = currentUserId != null && lobby?.host_user_id === currentUserId;
   const isParticipant =
@@ -496,11 +520,14 @@ export default function LobbyDetailScreen() {
                   </TouchableOpacity>
                 </View>
                 <TouchableOpacity
-                  style={styles.createMatchButton}
-                  onPress={handleCreateMatch}
+                  style={[styles.createMatchButton, creatingMatch && styles.joinButtonDisabled]}
+                  onPress={() => void handleCreateMatch()}
+                  disabled={creatingMatch}
                   activeOpacity={0.9}
                 >
-                  <Text style={styles.createMatchButtonText}>Create match</Text>
+                  <Text style={styles.createMatchButtonText}>
+                    {creatingMatch ? 'Creating match…' : 'Create match'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             )}
