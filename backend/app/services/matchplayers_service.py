@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from app.db.supabase_client import get_supabase_client
-from app.repositories.matchplayers_repository import insert_match_player, delete_match_players
+from app.repositories.matchplayers_repository import insert_match_players, delete_match_players
 def get_match_players() -> list[dict]:
     db = get_supabase_client()
 
@@ -14,8 +14,8 @@ def get_match_players() -> list[dict]:
 
     return response.data or []
 
-def insert_match_player_to_db(match_id: str, player_id: str, team: str):
-    insert_match_player(match_id=match_id, player_id=player_id, team=team)
+def insert_match_players_to_db(match_id: str, team_A_player_ids: list[str], team_B_player_ids: list[str]):
+    insert_match_players(match_id=match_id, team_A_player_ids=team_A_player_ids, team_B_player_ids=team_B_player_ids)
 
 def delete_match_players_from_db(match_id: str):
     delete_match_players(match_id=match_id)

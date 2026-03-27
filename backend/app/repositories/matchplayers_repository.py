@@ -5,7 +5,12 @@ from app.db.supabase_client import get_supabase_client
 
 from app.repositories.playerstats_repository import DEFAULT_STARTING_ELO
 
-def insert_match_player(match_id: str, player_id: str, team: str):
+def insert_match_players(
+        match_id: str, 
+        team_A_player_ids: list[str], 
+        team_B_player_ids: list[str],
+    ):
+
     client = get_supabase_admin_client()
 
     lobby_id = (
@@ -17,9 +22,6 @@ def insert_match_player(match_id: str, player_id: str, team: str):
         .execute()
     ).data["lobby_id"]
 
-    if not lobby_id:
-        raise Exception("Match not found")
-
     sport = (
         client
         .table("lobby")
@@ -29,37 +31,40 @@ def insert_match_player(match_id: str, player_id: str, team: str):
         .execute()
     ).data["sport"]
 
-    elo_res = (
-        client
-        .table("player_stats")
-        .select("elo")
-        .eq("user_id", player_id)
-        .eq("sport", sport)
-        .execute()
-    )
+    if not lobby_id:
+        raise Exception("Match not found")
+    
+    for player_id in team_A_player_ids + team_B_player_ids:
+        elo_res = (
+            client
+            .table("player_stats")
+            .select("elo")
+            .eq("user_id", player_id)
+            .eq("sport", sport)
+            .execute()
+        )
 
-    if not elo_res.data:
-        new_stat = {
-            "user_id": player_id,
-            "sport": sport,
-            "elo": DEFAULT_STARTING_ELO,
-            "wins": 0,
-            "losses": 0
+        if not elo_res.data:
+            new_stat = {
+                "user_id": player_id,
+                "sport": sport,
+                "elo": DEFAULT_STARTING_ELO,
+                "wins": 0,
+                "losses": 0
+            }
+            client.table("player_stats").insert(new_stat).execute()
+
+        initial_player_elo = elo_res.data[0]["elo"] if elo_res.data else DEFAULT_STARTING_ELO
+
+        payload = {
+            "match_id": match_id,
+            "player_id": player_id,
+            "team": "team_a" if player_id in team_A_player_ids else "team_b",
+            "elo_before": initial_player_elo,
+            "elo_after": None
         }
 
-        client.table("player_stats").insert(new_stat).execute()
-
-    initial_player_elo = elo_res.data[0]["elo"] if elo_res.data else DEFAULT_STARTING_ELO
-
-    payload = {
-        "match_id": match_id,
-        "player_id": player_id,
-        "team": team,
-        "elo_before": initial_player_elo,
-        "elo_after": None
-    }
-
-    client.table("match_players").upsert(payload, on_conflict="match_id,player_id").execute()
+        client.table("match_players").upsert(payload, on_conflict="match_id,player_id").execute()
 
 def delete_match_players(match_id: str):
     client = get_supabase_admin_client()
