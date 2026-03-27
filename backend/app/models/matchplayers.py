@@ -13,3 +13,8 @@ class MatchPlayerResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class CreateMatchPlayersRequest(BaseModel):
+    match_id: UUID
+    team_A_player_ids: list[UUID]
+    team_B_player_ids: list[UUID]

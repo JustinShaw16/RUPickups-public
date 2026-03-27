@@ -209,14 +209,61 @@ export default function MatchPage() {
     void load();
   }, [load]);
 
-  const onStartMatch = () => {
-    const message = 'Start match action is ready for next step.';
+  const onStartMatch = async () => {
+      if (!match?.match_id) {
+        Alert.alert('Start Match', 'Missing match id.');
+        return;
+      }
+ 
+      const teamAPlayerIds = teamSlots.teamA.filter((id): id is string => Boolean(id));
+      const teamBPlayerIds = teamSlots.teamB.filter((id): id is string => Boolean(id));
+      if (teamAPlayerIds.length === 0 || teamBPlayerIds.length === 0) {
+        Alert.alert('Start Match', 'Assign at least one player to each team.');
+        return;
+      }
+      const seen = new Set<string>();
+      for (const id of [...teamAPlayerIds, ...teamBPlayerIds]) {
+        if (seen.has(id)) {
+          Alert.alert('Start Match', 'A player is assigned to both teams.');
+          return;
+        }
+        seen.add(id);
+      }
+ 
+      try {
+        const params = new URLSearchParams();
+        params.append('match_id', match.match_id);
+        teamAPlayerIds.forEach((id) => params.append('team_A_player_ids', id));
+        teamBPlayerIds.forEach((id) => params.append('team_B_player_ids', id));
+ 
+    // Use your actual router prefix from backend/api/router.py
+        const res = await authedFetch('/match-players/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        match_id: match.match_id,
+        team_A_player_ids: teamAPlayerIds,
+        team_B_player_ids: teamBPlayerIds,
+      }),
+    });
+
+ 
+        if (!res.ok) {
+          const msg = await res.text().catch(() => '');
+          throw new Error(msg || `Failed to create match players (${res.status})`);
+        }
+ 
+        Alert.alert('Start Match', 'Teams saved successfully.');
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'Failed to start match.';
     if (Platform.OS === 'web') {
       window.alert(message);
-      return;
+    } else {
+      Alert.alert('Start Match', message);
     }
-    Alert.alert('Start Match', message);
-  };
+  }
+};
+
 
   return (
     <SafeAreaView style={styles.safeArea}>
