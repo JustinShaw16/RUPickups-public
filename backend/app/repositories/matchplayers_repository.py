@@ -61,3 +61,6 @@ def insert_match_player(match_id: str, player_id: str, team: str):
 
     client.table("match_players").upsert(payload, on_conflict="match_id,player_id").execute()
 
+def delete_match_players(match_id: str):
+    client = get_supabase_admin_client()
+    client.table("match_players").delete().eq("match_id", match_id).execute()
