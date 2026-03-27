@@ -11,7 +11,6 @@ import {
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-
 import { authedFetch } from '@/api/backend';
 
 type Match = {
