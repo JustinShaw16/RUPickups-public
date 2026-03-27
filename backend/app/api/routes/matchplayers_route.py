@@ -20,5 +20,6 @@ def create_match_players(payload: CreateMatchPlayersRequest):
     return {"ok": True}
 
 @router.delete("/", status_code=status.HTTP_200_OK)
-def delete_match_players(match_id: str):
-    delete_match_players_from_db(match_id=match_id)
+def delete_match_players(match_id: UUID):
+    delete_match_players_from_db(match_id=str(match_id))
+    return {"ok": True}

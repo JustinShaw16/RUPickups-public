@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { authedFetch } from '@/api/backend';
+import { Modal } from 'react-native';
 
 type Match = {
   match_id: string;
@@ -64,6 +65,9 @@ export default function MatchPage() {
   const [startedAtMs, setStartedAtMs] = useState<number | null>(null);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+
+  const [winnerModalVisible, setWinnerModalVisible] = useState(false);
+  const [selectedWinner, setSelectedWinner] = useState<'team_a' | 'team_b' | null>(null);
 
   const { teamASlots, teamBSlots } = useMemo(() => {
     const max = Math.max(lobby?.max_players ?? 0, 0);
@@ -265,19 +269,51 @@ export default function MatchPage() {
       }
   };
 
-  const onEndMatch = async () => {
+  const onEndMatch = () => {
       if (submitting || !matchRunning) return;
-      setSubmitting(true);
- 
-      try {
-        setMatchRunning(false);
-      } catch (e) {
-        const message = e instanceof Error ? e.message : 'Failed to end match.';
-        if (Platform.OS === 'web') window.alert(message);
-        else Alert.alert('End Match', message);
-      } finally {
-        setSubmitting(false);
-      }
+      setSelectedWinner(null);
+      setWinnerModalVisible(true);
+  };
+
+  const onConfirmWinner = async () => {
+    if (!selectedWinner || !match?.match_id) {
+        Alert.alert('End Match', 'Please choose a winner.');
+        return;
+    }
+    
+    setSubmitting(true);
+    try {
+        const deleteRes = await authedFetch(
+            `/match-players/?match_id=${encodeURIComponent(match.match_id)}`,
+            { method: 'DELETE' }
+            );
+        
+            if (!deleteRes.ok) {
+            const msg = await deleteRes.text().catch(() => '');
+            throw new Error(msg || `Failed to delete match players (${deleteRes.status})`);
+            }
+        
+            setMatchRunning(false);
+            setWinnerModalVisible(false);
+            setSelectedWinner(null);
+            setSelectedPlayerId(null);
+            setTeamSlots({
+            teamA: Array.from({ length: teamASlots }, () => null),
+            teamB: Array.from({ length: teamBSlots }, () => null),
+            });
+
+            if (match?.lobby_id) {
+                router.replace(`/lobby/${match.lobby_id}`);
+            } else {
+                router.replace('/(tabs)/lobbies');
+            }
+        } catch (e) {
+            const message = e instanceof Error ? e.message : 'Failed to end match.';
+            if (Platform.OS === 'web') window.alert(message);
+            else Alert.alert('End Match', message);
+        } finally {
+            setSubmitting(false);
+        }
   };
 
   const formatDuration = (ms: number) => {
@@ -439,6 +475,73 @@ export default function MatchPage() {
           </>
         )}
       </ScrollView>
+        <Modal
+        visible={winnerModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setWinnerModalVisible(false)}
+        >
+        <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Who won the match?</Text>
+
+            <Pressable
+                onPress={() => setSelectedWinner('team_a')}
+                style={[
+                styles.winnerOption,
+                selectedWinner === 'team_a' && styles.winnerOptionSelected,
+                ]}
+            >
+                <Text
+                style={[
+                    styles.winnerOptionText,
+                    selectedWinner === 'team_a' && styles.winnerOptionTextSelected,
+                ]}
+                >
+                Team A
+                </Text>
+            </Pressable>
+
+            <Pressable
+                onPress={() => setSelectedWinner('team_b')}
+                style={[
+                styles.winnerOption,
+                selectedWinner === 'team_b' && styles.winnerOptionSelected,
+                ]}
+            >
+                <Text
+                style={[
+                    styles.winnerOptionText,
+                    selectedWinner === 'team_b' && styles.winnerOptionTextSelected,
+                ]}
+                >
+                Team B
+                </Text>
+            </Pressable>
+
+            <Pressable
+                onPress={() => void onConfirmWinner()}
+                disabled={!selectedWinner || submitting}
+                style={[
+                styles.confirmWinnerButton,
+                (!selectedWinner || submitting) && styles.confirmWinnerButtonDisabled,
+                ]}
+            >
+                <Text style={styles.confirmWinnerButtonText}>
+                {submitting ? 'Confirming…' : 'Confirm'}
+                </Text>
+            </Pressable>
+
+            <Pressable
+                onPress={() => setWinnerModalVisible(false)}
+                style={styles.cancelModalButton}
+                disabled={submitting}
+            >
+                <Text style={styles.cancelModalButtonText}>Cancel</Text>
+            </Pressable>
+            </View>
+        </View>
+        </Modal>
     </SafeAreaView>
   );
 }
@@ -583,5 +686,77 @@ const styles = StyleSheet.create({
       color: '#FFFFFF',
       fontSize: 16,
       fontWeight: '700',
+  },
+
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+
+  modalCard: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: DARK_NAVY,
+    marginBottom: 12,
+  },
+  winnerOption: {
+    borderWidth: 1,
+    borderColor: BORDER_GRAY,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 10,
+  },
+
+  winnerOptionSelected: {
+    borderColor: RUTGERS_RED,
+    backgroundColor: 'rgba(204,0,51,0.08)',
+  },
+
+  winnerOptionText: {
+    color: DARK_NAVY,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+
+  winnerOptionTextSelected: {
+    color: RUTGERS_RED,
+  },
+
+  confirmWinnerButton: {
+    marginTop: 6,
+    borderRadius: 12,
+    backgroundColor: RUTGERS_RED,
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+
+  confirmWinnerButtonDisabled: {
+    opacity: 0.6,
+  },
+  confirmWinnerButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  cancelModalButton: {
+    marginTop: 10,
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  cancelModalButtonText: {
+    color: MUTED_TEXT,
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
