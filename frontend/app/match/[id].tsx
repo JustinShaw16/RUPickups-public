@@ -60,6 +60,11 @@ export default function MatchPage() {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [teamSlots, setTeamSlots] = useState<TeamSlotsState>({ teamA: [], teamB: [] });
 
+  const [matchRunning, setMatchRunning] = useState(false);
+  const [startedAtMs, setStartedAtMs] = useState<number | null>(null);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+
   const { teamASlots, teamBSlots } = useMemo(() => {
     const max = Math.max(lobby?.max_players ?? 0, 0);
     return {
@@ -209,67 +214,85 @@ export default function MatchPage() {
     void load();
   }, [load]);
 
-  const onStartMatch = async () => {
-      if (!match?.match_id) {
-        Alert.alert('Start Match', 'Missing match id.');
-        return;
-      }
+  useEffect(() => {
+      if (!matchRunning || startedAtMs == null) return;
  
-      const teamAPlayerIds = teamSlots.teamA.filter((id): id is string => Boolean(id));
-      const teamBPlayerIds = teamSlots.teamB.filter((id): id is string => Boolean(id));
-      if (teamAPlayerIds.length === 0 || teamBPlayerIds.length === 0) {
-        Alert.alert('Start Match', 'Assign at least one player to each team.');
-        return;
-      }
-      const seen = new Set<string>();
-      for (const id of [...teamAPlayerIds, ...teamBPlayerIds]) {
-        if (seen.has(id)) {
-          Alert.alert('Start Match', 'A player is assigned to both teams.');
-          return;
-        }
-        seen.add(id);
-      }
+      const interval = setInterval(() => {
+        setElapsedMs(Date.now() - startedAtMs);
+      }, 1000);
+ 
+      return () => clearInterval(interval);
+  }, [matchRunning, startedAtMs]);
+
+  const onStartMatch = async () => {
+      if (submitting || matchRunning || !match?.match_id) return;
+      setSubmitting(true);
  
       try {
-        const params = new URLSearchParams();
-        params.append('match_id', match.match_id);
-        teamAPlayerIds.forEach((id) => params.append('team_A_player_ids', id));
-        teamBPlayerIds.forEach((id) => params.append('team_B_player_ids', id));
+        const teamAPlayerIds = teamSlots.teamA.filter((id): id is string => Boolean(id));
+        const teamBPlayerIds = teamSlots.teamB.filter((id): id is string => Boolean(id));
+        
+        if (teamAPlayerIds.length === 0 || teamBPlayerIds.length === 0) {
+          Alert.alert('Start Match', 'Assign at least one player to each team.');
+          return;
+        }
  
-    // Use your actual router prefix from backend/api/router.py
         const res = await authedFetch('/match-players/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        match_id: match.match_id,
-        team_A_player_ids: teamAPlayerIds,
-        team_B_player_ids: teamBPlayerIds,
-      }),
-    });
-
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            match_id: match.match_id,
+            team_A_player_ids: teamAPlayerIds,
+            team_B_player_ids: teamBPlayerIds,
+          }),
+        });
  
         if (!res.ok) {
           const msg = await res.text().catch(() => '');
           throw new Error(msg || `Failed to create match players (${res.status})`);
         }
  
-        Alert.alert('Start Match', 'Teams saved successfully.');
-  } catch (e) {
-    const message = e instanceof Error ? e.message : 'Failed to start match.';
-    if (Platform.OS === 'web') {
-      window.alert(message);
-    } else {
-      Alert.alert('Start Match', message);
-    }
-  }
-};
+        const now = Date.now();
+        setStartedAtMs(now);
+        setElapsedMs(0);
+        setMatchRunning(true);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'Failed to start match.';
+        if (Platform.OS === 'web') window.alert(message);
+        else Alert.alert('Start Match', message);
+      } finally {
+        setSubmitting(false);
+      }
+  };
 
+  const onEndMatch = async () => {
+      if (submitting || !matchRunning) return;
+      setSubmitting(true);
+ 
+      try {
+        setMatchRunning(false);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'Failed to end match.';
+        if (Platform.OS === 'web') window.alert(message);
+        else Alert.alert('End Match', message);
+      } finally {
+        setSubmitting(false);
+      }
+  };
+
+  const formatDuration = (ms: number) => {
+      const totalSec = Math.floor(ms / 1000);
+      const h = Math.floor(totalSec / 3600).toString().padStart(2, '0');
+      const m = Math.floor((totalSec % 3600) / 60).toString().padStart(2, '0');
+      const s = Math.floor(totalSec % 60).toString().padStart(2, '0');
+      return `${h}:${m}:${s}`;
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.headerRow}>
-          <Text style={styles.title}>Match Setup</Text>
+          <Text style={styles.title}>Match</Text>
           <Pressable
             onPress={() => void handleLeaveLobby()}
             disabled={leaving}
@@ -296,9 +319,28 @@ export default function MatchPage() {
           </View>
         ) : (
           <>
-            <Pressable onPress={onStartMatch} style={styles.startButton}>
-              <Text style={styles.startButtonText}>Start Match</Text>
+            <Text style={styles.timerText}>{formatDuration(elapsedMs)}</Text>
+            {matchRunning ? (
+            <Pressable
+                onPress={() => void onEndMatch()}
+                style={styles.endButton}
+                disabled={submitting}
+            >
+                <Text style={styles.endButtonText}>
+                {submitting ? 'Ending…' : 'End Match'}
+                </Text>
             </Pressable>
+            ) : (
+            <Pressable
+                onPress={() => void onStartMatch()}
+                style={styles.startButton}
+                disabled={submitting}
+            >
+                <Text style={styles.startButtonText}>
+                {submitting ? 'Starting…' : 'Start Match'}
+                </Text>
+            </Pressable>
+            )}
 
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Players ({players.length})</Text>
@@ -520,4 +562,26 @@ const styles = StyleSheet.create({
   slotFilledText: { color: DARK_NAVY, fontSize: 14, fontWeight: '700' },
 
   emptyText: { color: MUTED_TEXT, fontSize: 14 },
+
+  timerText: {
+      color: '#FFFFFF',
+      fontSize: 24,
+      fontWeight: '700',
+      textAlign: 'center',
+      marginBottom: 10,
+  },
+
+  endButton: {
+      backgroundColor: '#B91C1C',
+      borderRadius: 14,
+      paddingVertical: 14,
+      alignItems: 'center',
+      marginBottom: 24,
+  },
+
+  endButtonText: {
+      color: '#FFFFFF',
+      fontSize: 16,
+      fontWeight: '700',
+  },
 });
