@@ -1,4 +1,5 @@
 """Data access for `player_stats` (per user / sport)."""
+from uuid import UUID
 
 from app.db.supabase_admin_client import get_supabase_admin_client
 from app.db.supabase_client import get_supabase_client
@@ -76,3 +77,19 @@ def ensure_basketball_rows_for_user_ids(user_ids: list[str]) -> None:
                 "losses": 0,
             }
         ).execute()
+
+def update_win_count(user_id: UUID, sport: str):
+    client = get_supabase_admin_client()
+
+    client.rpc("increment_wins", {
+        "p_user_id": str(user_id),
+        "p_sport": sport
+    }).execute()
+
+def update_loss_count(user_id: UUID, sport: str):
+    client = get_supabase_admin_client()
+
+    client.rpc("increment_losses", {
+        "p_user_id": str(user_id),
+        "p_sport": sport
+    }).execute()
