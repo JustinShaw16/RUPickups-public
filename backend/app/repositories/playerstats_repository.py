@@ -8,6 +8,7 @@ from app.db.supabase_client import get_supabase_client
 DEFAULT_SPORT = "Basketball"
 DEFAULT_STARTING_ELO = 400
 
+db = get_supabase_admin_client()
 
 def aggregate_stats_rows(rows: list[dict]) -> dict[str, int]:
     """Combine per-sport rows into headline wins, losses, and elo."""
@@ -26,7 +27,6 @@ def get_aggregated_stats_map_by_user_ids(user_ids: list[str]) -> dict[str, dict[
     """
     if not user_ids:
         return {}
-    db = get_supabase_client()
     response = (
         db.table("player_stats")
         .select("user_id,wins,losses,elo")
@@ -42,7 +42,6 @@ def get_aggregated_stats_map_by_user_ids(user_ids: list[str]) -> dict[str, dict[
 
 def get_all_player_stats() -> list[dict]:
     """Raw rows from player_stats (all columns)."""
-    db = get_supabase_client()
     response = db.table("player_stats").select("*").execute()
     return response.data or []
 
@@ -79,9 +78,7 @@ def ensure_basketball_rows_for_user_ids(user_ids: list[str]) -> None:
         ).execute()
 
 def process_match_player_stats_in_db(winner_ids: list[str], loser_ids: list[str], sport: str):
-    client = get_supabase_admin_client()
-
-    client.rpc("process_match", {
+    db.rpc("process_match", {
         "p_winner_ids": winner_ids,
         "p_loser_ids": loser_ids,
         "p_sport": sport
