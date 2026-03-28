@@ -22,6 +22,9 @@ def insert_match_players(
         .execute()
     ).data["lobby_id"]
 
+    if not lobby_id:
+        raise Exception("Match not found")
+
     sport = (
         client
         .table("lobby")
@@ -30,9 +33,6 @@ def insert_match_players(
         .single()
         .execute()
     ).data["sport"]
-
-    if not lobby_id:
-        raise Exception("Match not found")
     
     for player_id in team_A_player_ids + team_B_player_ids:
         elo_res = (
@@ -45,14 +45,18 @@ def insert_match_players(
         )
 
         if not elo_res.data:
-            new_stat = {
-                "user_id": player_id,
-                "sport": sport,
-                "elo": DEFAULT_STARTING_ELO,
-                "wins": 0,
-                "losses": 0
-            }
-            client.table("player_stats").insert(new_stat).execute()
+            client.table("player_stats").upsert(
+                {
+                    "user_id": str(player_id),
+                    "sport": sport,
+                    "matche_played": 0,
+                    "wins": 0,
+                    "losses": 0,
+                    "elo": DEFAULT_STARTING_ELO,
+                    "current_streak": 0
+                },
+                on_conflict="user_id,sport",
+            ).execute()
 
         initial_player_elo = elo_res.data[0]["elo"] if elo_res.data else DEFAULT_STARTING_ELO
 

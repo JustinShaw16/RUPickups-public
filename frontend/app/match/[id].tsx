@@ -35,6 +35,7 @@ type Participant = {
 type Lobby = {
   lobby_id: string;
   max_players: number;
+  sport: string;
 };
 
 type TeamKey = 'teamA' | 'teamB';
@@ -76,6 +77,19 @@ export default function MatchPage() {
       teamBSlots: Math.floor(max / 2),
     };
   }, [lobby?.max_players]);
+
+  const patchPlayerStats = async (
+      endpoint: '/player-stats/win' | '/player-stats/lose',
+      userIds: string[],
+      sport: string
+  ) => {
+      const params = new URLSearchParams();
+      userIds.forEach((id) => params.append('user_ids', id)); // repeated query key
+      params.append('sport', sport);
+ 
+      return authedFetch(`${endpoint}?${params.toString()}`, { method: 'PATCH' });
+  };
+
 
   const resizeSlots = useCallback((arr: Array<string | null>, size: number) => {
     if (arr.length === size) return arr;
@@ -275,46 +289,62 @@ export default function MatchPage() {
       setWinnerModalVisible(true);
   };
 
-  const onConfirmWinner = async () => {
+    const onConfirmWinner = async () => {
     if (!selectedWinner || !match?.match_id) {
         Alert.alert('End Match', 'Please choose a winner.');
         return;
     }
-    
+
+    const teamAIds = teamSlots.teamA.filter((id): id is string => Boolean(id));
+    const teamBIds = teamSlots.teamB.filter((id): id is string => Boolean(id));
+
+    const winnerIds = selectedWinner === 'team_a' ? teamAIds : teamBIds;
+    const loserIds = selectedWinner === 'team_a' ? teamBIds : teamAIds;
+
+    if (winnerIds.length === 0 || loserIds.length === 0) {
+        Alert.alert('End Match', 'Both teams need at least one player assigned.');
+        return;
+    }
+
+    const sport = lobby?.sport ?? 'Basketball';
+    const lobbyId = match.lobby_id;
+
     setSubmitting(true);
     try {
-        const deleteRes = await authedFetch(
-            `/match-players/?match_id=${encodeURIComponent(match.match_id)}`,
-            { method: 'DELETE' }
-            );
-        
-            if (!deleteRes.ok) {
-            const msg = await deleteRes.text().catch(() => '');
-            throw new Error(msg || `Failed to delete match players (${deleteRes.status})`);
-            }
-        
-            setMatchRunning(false);
-            setWinnerModalVisible(false);
-            setSelectedWinner(null);
-            setSelectedPlayerId(null);
-            setTeamSlots({
-            teamA: Array.from({ length: teamASlots }, () => null),
-            teamB: Array.from({ length: teamBSlots }, () => null),
-            });
+        const [winRes, loseRes] = await Promise.all([
+        patchPlayerStats('/player-stats/win', winnerIds, sport),
+        patchPlayerStats('/player-stats/lose', loserIds, sport),
+        ]);
 
-            if (match?.lobby_id) {
-                router.replace(`/lobby/${match.lobby_id}`);
-            } else {
-                router.replace('/(tabs)/lobbies');
-            }
-        } catch (e) {
-            const message = e instanceof Error ? e.message : 'Failed to end match.';
-            if (Platform.OS === 'web') window.alert(message);
-            else Alert.alert('End Match', message);
-        } finally {
-            setSubmitting(false);
+        if (!winRes.ok || !loseRes.ok) {
+        const winMsg = winRes.ok ? '' : await winRes.text().catch(() => '');
+        const loseMsg = loseRes.ok ? '' : await loseRes.text().catch(() => '');
+        throw new Error(winMsg || loseMsg || 'Failed to update win/loss stats.');
         }
-  };
+
+        const deleteRes = await authedFetch(
+        `/match-players/?match_id=${encodeURIComponent(match.match_id)}`,
+        { method: 'DELETE' }
+        );
+
+        if (!deleteRes.ok) {
+        const msg = await deleteRes.text().catch(() => '');
+        throw new Error(msg || `Failed to delete match players (${deleteRes.status})`);
+        }
+
+        setMatchRunning(false);
+        setWinnerModalVisible(false);
+        setSelectedWinner(null);
+
+        router.replace({ pathname: '/lobby/[id]', params: { id: lobbyId } });
+    } catch (e) {
+        const message = e instanceof Error ? e.message : 'Failed to end match.';
+        if (Platform.OS === 'web') window.alert(message);
+        else Alert.alert('End Match', message);
+    } finally {
+        setSubmitting(false);
+    }
+    };
 
   const formatDuration = (ms: number) => {
       const totalSec = Math.floor(ms / 1000);
