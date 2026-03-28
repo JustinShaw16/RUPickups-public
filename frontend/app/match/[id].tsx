@@ -290,60 +290,63 @@ export default function MatchPage() {
   };
 
     const onConfirmWinner = async () => {
-    if (!selectedWinner || !match?.match_id) {
-        Alert.alert('End Match', 'Please choose a winner.');
-        return;
-    }
-
-    const teamAIds = teamSlots.teamA.filter((id): id is string => Boolean(id));
-    const teamBIds = teamSlots.teamB.filter((id): id is string => Boolean(id));
-
-    const winnerIds = selectedWinner === 'team_a' ? teamAIds : teamBIds;
-    const loserIds = selectedWinner === 'team_a' ? teamBIds : teamAIds;
-
-    if (winnerIds.length === 0 || loserIds.length === 0) {
-        Alert.alert('End Match', 'Both teams need at least one player assigned.');
-        return;
-    }
-
-    const sport = lobby?.sport ?? 'Basketball';
-    const lobbyId = match.lobby_id;
-
-    setSubmitting(true);
-    try {
-        const [winRes, loseRes] = await Promise.all([
-        patchPlayerStats('/player-stats/win', winnerIds, sport),
-        patchPlayerStats('/player-stats/lose', loserIds, sport),
-        ]);
-
-        if (!winRes.ok || !loseRes.ok) {
-        const winMsg = winRes.ok ? '' : await winRes.text().catch(() => '');
-        const loseMsg = loseRes.ok ? '' : await loseRes.text().catch(() => '');
-        throw new Error(winMsg || loseMsg || 'Failed to update win/loss stats.');
+        if (!selectedWinner || !match?.match_id) {
+            Alert.alert('End Match', 'Please choose a winner.');
+            return;
         }
 
-        const deleteRes = await authedFetch(
-        `/match-players/?match_id=${encodeURIComponent(match.match_id)}`,
-        { method: 'DELETE' }
-        );
+        const teamAIds = teamSlots.teamA.filter((id): id is string => Boolean(id));
+        const teamBIds = teamSlots.teamB.filter((id): id is string => Boolean(id));
 
-        if (!deleteRes.ok) {
-        const msg = await deleteRes.text().catch(() => '');
-        throw new Error(msg || `Failed to delete match players (${deleteRes.status})`);
+        const winnerIds = selectedWinner === 'team_a' ? teamAIds : teamBIds;
+        const loserIds = selectedWinner === 'team_a' ? teamBIds : teamAIds;
+
+        if (winnerIds.length === 0 || loserIds.length === 0) {
+            Alert.alert('End Match', 'Both teams need at least one assigned player.');
+            return;
         }
 
-        setMatchRunning(false);
-        setWinnerModalVisible(false);
-        setSelectedWinner(null);
+        const sport = lobby?.sport ?? 'Basketball';
+        const lobbyId = match.lobby_id;
 
-        router.replace({ pathname: '/lobby/[id]', params: { id: lobbyId } });
-    } catch (e) {
-        const message = e instanceof Error ? e.message : 'Failed to end match.';
-        if (Platform.OS === 'web') window.alert(message);
-        else Alert.alert('End Match', message);
-    } finally {
-        setSubmitting(false);
-    }
+        setSubmitting(true);
+        try {
+            const params = new URLSearchParams();
+            winnerIds.forEach((id) => params.append('winner_ids', id));
+            loserIds.forEach((id) => params.append('loser_ids', id));
+            params.append('sport', sport);
+
+            const processRes = await authedFetch(`/player-stats/process?${params.toString()}`, {
+            method: 'PATCH',
+            });
+
+            if (!processRes.ok) {
+            const msg = await processRes.text().catch(() => '');
+            throw new Error(msg || `Failed to process match stats (${processRes.status})`);
+            }
+
+            const deleteRes = await authedFetch(
+            `/match-players/?match_id=${encodeURIComponent(match.match_id)}`,
+            { method: 'DELETE' }
+            );
+
+            if (!deleteRes.ok) {
+            const msg = await deleteRes.text().catch(() => '');
+            throw new Error(msg || `Failed to delete match players (${deleteRes.status})`);
+            }
+
+            setMatchRunning(false);
+            setWinnerModalVisible(false);
+            setSelectedWinner(null);
+
+            router.replace({ pathname: '/lobby/[id]', params: { id: lobbyId } });
+        } catch (e) {
+            const message = e instanceof Error ? e.message : 'Failed to end match.';
+            if (Platform.OS === 'web') window.alert(message);
+            else Alert.alert('End Match', message);
+        } finally {
+            setSubmitting(false);
+        }
     };
 
   const formatDuration = (ms: number) => {

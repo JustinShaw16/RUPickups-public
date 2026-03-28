@@ -78,20 +78,11 @@ def ensure_basketball_rows_for_user_ids(user_ids: list[str]) -> None:
             }
         ).execute()
 
-def update_win_count(user_ids: list[UUID], sport: str):
+def process_match_player_stats_in_db(winner_ids: list[str], loser_ids: list[str], sport: str):
     client = get_supabase_admin_client()
 
-    for user_id in user_ids:
-        client.rpc("increment_wins", {
-            "p_user_id": str(user_id),
-            "p_sport": sport
-        }).execute()
-
-def update_loss_count(user_ids: list[UUID], sport: str):
-    client = get_supabase_admin_client()
-
-    for user_id in user_ids:
-        client.rpc("increment_losses", {
-            "p_user_id": str(user_id),
-            "p_sport": sport
-        }).execute()
+    client.rpc("process_match", {
+        "p_winner_ids": winner_ids,
+        "p_loser_ids": loser_ids,
+        "p_sport": sport
+    }).execute()
