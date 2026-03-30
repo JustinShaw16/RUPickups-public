@@ -10,6 +10,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  Platform,
   View,
 } from 'react-native'
 
@@ -217,6 +218,11 @@ export default function EditProfileScreen() {
 
   const handleCancel = () => {
     if (!isDirty) {
+      router.back()
+      return
+    }
+
+    if (Platform.OS === 'web') {
       router.back()
       return
     }
