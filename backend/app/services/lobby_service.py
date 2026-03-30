@@ -1,7 +1,16 @@
 from uuid import UUID
 
-from app.repositories import lobby_repository
+from app.repositories import lobby_repository, playerstats_repository
 from app.models.lobby import LobbyCreate, LobbyResponse, LobbyUpdate
+
+
+def _user_elo(user_id: str) -> int:
+    uid = str(user_id).strip()
+    stats = playerstats_repository.get_aggregated_stats_map_by_user_ids([uid])
+    row = stats.get(uid)
+    if not row:
+        return int(playerstats_repository.DEFAULT_STARTING_ELO)
+    return int(row.get("elo", playerstats_repository.DEFAULT_STARTING_ELO))
 
 
 def get_all_lobbies() -> list[LobbyResponse]:
@@ -17,6 +26,9 @@ def get_lobby_by_id(lobby_id: UUID) -> dict | None:
 
 
 def create_lobby(*, user_id: str, payload: LobbyCreate):
+    host_elo = _user_elo(user_id)
+    if int(payload.min_elo) > host_elo:
+        raise ValueError("Minimum ELO cannot be higher than your current ELO")
     return lobby_repository.create_lobby(host_user_id=user_id, payload=payload)
 
 
@@ -24,6 +36,10 @@ def update_lobby(*, lobby_id: UUID, user_id: str, payload: LobbyUpdate) -> dict 
     lobby = lobby_repository.get_lobby_by_id(lobby_id)
     if not lobby or str(lobby.get("host_user_id")) != user_id:
         return None
+    if payload.min_elo is not None:
+        host_elo = _user_elo(user_id)
+        if int(payload.min_elo) > host_elo:
+            raise ValueError("Minimum ELO cannot be higher than your current ELO")
     return lobby_repository.update_lobby(lobby_id=lobby_id, payload=payload)
 
 
@@ -56,6 +72,11 @@ def join_lobby(*, lobby_id: UUID, user_id: str) -> dict:
     max_players = int(lobby.get("max_players") or 0)
     if max_players > 0 and len(participants) >= max_players:
         raise RuntimeError("Lobby is full")
+
+    min_elo = int(lobby.get("min_elo") or 0)
+    user_elo = _user_elo(user_id)
+    if user_elo < min_elo:
+        raise RuntimeError("Your ELO is below this lobby's minimum")
 
     return lobby_repository.join_lobby(lobby_id=lobby_id, player_id=user_id)
 

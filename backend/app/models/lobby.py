@@ -14,6 +14,7 @@ class LobbyCreate(BaseModel):
     location_id: Optional[UUID] = None
     is_public: bool = Field(default=True)
     max_players: int = Field(default=2, ge=2, le=100)
+    min_elo: int = Field(default=0, ge=0)
 
 
 class LobbyUpdate(BaseModel):
@@ -24,6 +25,7 @@ class LobbyUpdate(BaseModel):
     location_id: Optional[UUID] = None
     is_public: Optional[bool] = None
     max_players: Optional[int] = Field(default=None, ge=2, le=100)
+    min_elo: Optional[int] = Field(default=None, ge=0)
 
 
 class LobbyResponse(BaseModel):
@@ -35,6 +37,7 @@ class LobbyResponse(BaseModel):
     location_id: Optional[UUID] = None
     is_public: bool = Field(default=True)
     max_players: int = Field(default=2, ge=2, le=100)
+    min_elo: int = Field(default=0, ge=0)
     status: str
     scheduled_start_time: datetime
     created_at: datetime

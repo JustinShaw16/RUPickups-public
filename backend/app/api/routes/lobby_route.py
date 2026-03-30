@@ -54,6 +54,11 @@ def join_lobby(lobby_id: UUID, user_id: str = Depends(require_user_id)):
             raise HTTPException(status_code=409, detail="Already in this lobby") from e
         if "duplicate" in err or "unique" in err:
             raise HTTPException(status_code=409, detail="Already in this lobby") from e
+        if "below" in err and "minimum" in err:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=str(e),
+            ) from e
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
@@ -75,7 +80,10 @@ def update_lobby(
     payload: LobbyUpdate,
     user_id: str = Depends(require_user_id),
 ):
-    result = lobby_service.update_lobby(lobby_id=lobby_id, user_id=user_id, payload=payload)
+    try:
+        result = lobby_service.update_lobby(lobby_id=lobby_id, user_id=user_id, payload=payload)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     if not result:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -95,5 +103,8 @@ def delete_lobby(lobby_id: UUID, user_id: str = Depends(require_user_id)):
 
 @router.post("", response_model=LobbyResponse, status_code=status.HTTP_201_CREATED)
 def create_lobby(payload: LobbyCreate, user_id: str = Depends(require_user_id)):
-    return lobby_service.create_lobby(user_id=user_id, payload=payload)
+    try:
+        return lobby_service.create_lobby(user_id=user_id, payload=payload)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 

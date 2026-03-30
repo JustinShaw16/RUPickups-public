@@ -37,6 +37,7 @@ type Lobby = {
   created_at: string;
   participant_count?: number | null;
   participant_average_elo?: number | null;
+  min_elo?: number;
 };
 
 type Location = {
@@ -86,6 +87,8 @@ export default function LobbiesScreen() {
   const [sport, setSport] = useState<string>('');
   const [locationId, setLocationId] = useState<string | null>(null);
   const [maxPlayers, setMaxPlayers] = useState<string>('10');
+  const [minEloInput, setMinEloInput] = useState<string>('');
+  const [myElo, setMyElo] = useState<number | null>(null);
   const [isPublic, setIsPublic] = useState<boolean>(true);
   const [scheduledAt, setScheduledAt] = useState<Date>(() => {
     const d = new Date();
@@ -106,8 +109,57 @@ export default function LobbiesScreen() {
     try {
       const lobbiesRes = await fetch(`${API_BASE_URL}/lobbies`);
 
+<<<<<<< HEAD
       if (!lobbiesRes.ok) {
         throw new Error(`Failed to load lobbies (${lobbiesRes.status})`);
+=======
+        if (!lobbiesRes.ok) {
+          throw new Error(`Failed to load lobbies (${lobbiesRes.status})`);
+        }
+
+        const lobbiesData: Lobby[] = await lobbiesRes.json();
+        setLobbies(
+          lobbiesData.sort(
+            (a, b) =>
+              new Date(a.scheduled_start_time).getTime() -
+              new Date(b.scheduled_start_time).getTime(),
+          ),
+        );
+
+        // Load locations and current user in the background so lobbies appear faster
+        void (async () => {
+          try {
+            const locationsRes = await fetch(`${API_BASE_URL}/locations/location_manifest`);
+            if (locationsRes.ok) {
+              const locationsData: Location[] = await locationsRes.json();
+              setLocations(locationsData);
+            }
+          } catch {
+            // ignore location errors for the main lobbies list
+          }
+        })();
+
+        void (async () => {
+          try {
+            const meRes = await authedFetch('/users/me');
+            if (meRes.ok) {
+              const me = (await meRes.json()) as { user_id: string; elo: number };
+              setCurrentUserId(me.user_id);
+              setMyElo(typeof me.elo === 'number' ? me.elo : null);
+            }
+          } catch {
+            // ignore user loading errors; lobbies list still works
+          }
+        })();
+      } catch (e) {
+        if (e instanceof Error) {
+          setError(e.message);
+        } else {
+          setError('Failed to load lobbies.');
+        }
+      } finally {
+        setLoading(false);
+>>>>>>> bdff8c9 (min ELO filter)
       }
 
       const lobbiesData: Lobby[] = await lobbiesRes.json();
@@ -165,6 +217,7 @@ export default function LobbiesScreen() {
     setSport('');
     setLocationId(null);
     setMaxPlayers('10');
+    setMinEloInput('');
     setIsPublic(true);
     const d = new Date();
     d.setMinutes(d.getMinutes() + 30);
@@ -292,6 +345,20 @@ export default function LobbiesScreen() {
       return;
     }
 
+    const minEloTrim = minEloInput.trim();
+    let minElo = 0;
+    if (minEloTrim !== '') {
+      minElo = parseInt(minEloTrim, 10);
+      if (Number.isNaN(minElo) || minElo < 0) {
+        setCreateError('Minimum ELO must be a non-negative whole number.');
+        return;
+      }
+      if (myElo != null && minElo > myElo) {
+        setCreateError(`Minimum ELO cannot be higher than your current ELO (${myElo}).`);
+        return;
+      }
+    }
+
     const now = new Date();
     if (scheduledAt.getTime() <= now.getTime()) {
       setCreateError('Start time must be in the future.');
@@ -309,6 +376,7 @@ export default function LobbiesScreen() {
         location_id: locationId,
         is_public: isPublic,
         max_players: max,
+        min_elo: minElo,
         scheduled_start_time: scheduledAt.toISOString(),
       };
 
@@ -321,7 +389,14 @@ export default function LobbiesScreen() {
       });
 
       if (!res.ok) {
-        const msg = await res.text().catch(() => '');
+        const raw = await res.text().catch(() => '');
+        let msg = raw;
+        try {
+          const j = JSON.parse(raw) as { detail?: string };
+          if (typeof j.detail === 'string') msg = j.detail;
+        } catch {
+          /* not JSON */
+        }
         throw new Error(msg || `Failed to create lobby (${res.status})`);
       }
 
@@ -561,7 +636,7 @@ export default function LobbiesScreen() {
                       <Text style={styles.metaText}>
                         {lobby.is_public ? 'Public' : 'Private'} ·{' '}
                         {(lobby.participant_count ?? 0)}/{lobby.max_players} players · Min ELO{' '}
-                        {MIN_LOBBY_ELO}
+                        {lobby.min_elo ?? 0}
                       </Text>
                     </View>
                   </View>
@@ -777,6 +852,21 @@ export default function LobbiesScreen() {
               onChangeText={setMaxPlayers}
             />
 
+            <Text style={styles.label}>Minimum ELO</Text>
+            <TextInput
+              style={styles.input}
+              keyboardType="number-pad"
+              value={minEloInput}
+              onChangeText={setMinEloInput}
+              placeholder="0 (default)"
+              placeholderTextColor={MUTED_TEXT}
+            />
+            <Text style={styles.mutedTextSmall}>
+              Only players at or above this ELO can join. Leave blank for 0. Cannot exceed your
+              current ELO
+              {myElo != null ? ` (${myElo}).` : '.'}
+            </Text>
+
             <View style={styles.switchRow}>
               <View>
                 <Text style={styles.label}>Public lobby</Text>
@@ -819,8 +909,6 @@ const DARK_NAVY = '#111827';
 const LIGHT_GRAY = '#F9FAFB';
 const BORDER_GRAY = '#E5E7EB';
 const MUTED_TEXT = '#6B7280';
-/** Display-only floor for lobby ELO (not enforced server-side yet). */
-const MIN_LOBBY_ELO = 0;
 
 const styles = StyleSheet.create({
   safeArea: {

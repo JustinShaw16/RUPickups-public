@@ -119,6 +119,7 @@ create table if not exists public.lobby (
   is_public boolean not null default true,
   
   max_players integer not null default 5 check (max_players > 1),
+  min_elo integer not null default 0 check (min_elo >= 0),
   status lobby_status not null default 'open',
   scheduled_start_time timestamptz not null default now(),
   created_at timestamptz not null default now()

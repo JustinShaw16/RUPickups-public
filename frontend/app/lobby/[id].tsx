@@ -38,6 +38,7 @@ type Lobby = {
   scheduled_start_time: string;
   created_at: string;
   participant_average_elo?: number | null;
+  min_elo?: number;
 };
 
 type Location = {
@@ -64,8 +65,6 @@ const DARK_NAVY = '#111827';
 const LIGHT_GRAY = '#F9FAFB';
 const BORDER_GRAY = '#E5E7EB';
 const MUTED_TEXT = '#6B7280';
-/** Display-only floor for lobby ELO (not enforced server-side yet). */
-const MIN_LOBBY_ELO = 0;
 
 export default function LobbyDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -81,6 +80,7 @@ export default function LobbyDetailScreen() {
   const [leaving, setLeaving] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserElo, setCurrentUserElo] = useState<number | null>(null);
 
   const [editOpen, setEditOpen] = useState(false);
   const [editLobbyName, setEditLobbyName] = useState('');
@@ -88,6 +88,7 @@ export default function LobbyDetailScreen() {
   const [editLocationId, setEditLocationId] = useState<string | null>(null);
   const [editScheduledAt, setEditScheduledAt] = useState<Date>(() => new Date());
   const [editMaxPlayers, setEditMaxPlayers] = useState('10');
+  const [editMinElo, setEditMinElo] = useState('0');
   const [editIsPublic, setEditIsPublic] = useState(true);
   const [editError, setEditError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -144,10 +145,12 @@ export default function LobbyDetailScreen() {
     try {
       const res = await authedFetch('/users/me');
       if (!res.ok) return;
-      const data = (await res.json()) as { user_id: string };
+      const data = (await res.json()) as { user_id: string; elo: number };
       setCurrentUserId(data.user_id);
+      setCurrentUserElo(typeof data.elo === 'number' ? data.elo : null);
     } catch {
       setCurrentUserId(null);
+      setCurrentUserElo(null);
     }
   }, []);
 
@@ -210,6 +213,11 @@ export default function LobbyDetailScreen() {
         const isFull = detail.toLowerCase().includes('full');
         showJoinConflict(isFull, detail);
         await Promise.all([loadParticipants(), loadLobby()]);
+        return;
+      }
+      if (res.status === 403) {
+        const detail = await readErrorDetail(res);
+        showJoinConflict(false, detail);
         return;
       }
       if (!res.ok) {
@@ -288,6 +296,9 @@ export default function LobbyDetailScreen() {
     (currentUserId != null &&
       participants.some((p) => p.player_id === currentUserId));
   const isLobbyFull = !!lobby && participants.length >= lobby.max_players;
+  const lobbyMinElo = lobby?.min_elo ?? 0;
+  const isBelowMinElo =
+    currentUserElo != null && lobby != null && currentUserElo < lobbyMinElo;
 
   const openEdit = useCallback(() => {
     if (!lobby) return;
@@ -296,6 +307,7 @@ export default function LobbyDetailScreen() {
     setEditLocationId(lobby.location_id);
     setEditScheduledAt(new Date(lobby.scheduled_start_time));
     setEditMaxPlayers(String(lobby.max_players));
+    setEditMinElo(String(lobby.min_elo ?? 0));
     setEditIsPublic(lobby.is_public);
     setEditError(null);
     setEditOpen(true);
@@ -369,6 +381,19 @@ export default function LobbyDetailScreen() {
       setEditError('Max players must be at least 2.');
       return;
     }
+    const minEloTrim = editMinElo.trim();
+    let minElo = 0;
+    if (minEloTrim !== '') {
+      minElo = parseInt(minEloTrim, 10);
+      if (Number.isNaN(minElo) || minElo < 0) {
+        setEditError('Minimum ELO must be a non-negative whole number.');
+        return;
+      }
+      if (currentUserElo != null && minElo > currentUserElo) {
+        setEditError(`Minimum ELO cannot be higher than your current ELO (${currentUserElo}).`);
+        return;
+      }
+    }
     if (editScheduledAt.getTime() <= Date.now()) {
       setEditError('Start time must be in the future.');
       return;
@@ -386,11 +411,19 @@ export default function LobbyDetailScreen() {
           location_id: editLocationId,
           is_public: editIsPublic,
           max_players: max,
+          min_elo: minElo,
           scheduled_start_time: editScheduledAt.toISOString(),
         }),
       });
       if (!res.ok) {
-        const msg = await res.text().catch(() => '');
+        const raw = await res.text().catch(() => '');
+        let msg = raw;
+        try {
+          const j = JSON.parse(raw) as { detail?: string };
+          if (typeof j.detail === 'string') msg = j.detail;
+        } catch {
+          /* not JSON */
+        }
         setEditError(msg || 'Failed to update lobby.');
         return;
       }
@@ -515,7 +548,7 @@ export default function LobbyDetailScreen() {
                   ) : null}
                   <Text style={styles.metaText}>
                     {lobby.max_players} players max · {lobby.is_public ? 'Public' : 'Private'} · Min ELO{' '}
-                    {MIN_LOBBY_ELO}
+                    {lobbyMinElo}
                   </Text>
                 </View>
               </View>
@@ -560,6 +593,11 @@ export default function LobbyDetailScreen() {
                 {isParticipant ? 'You are in this lobby' : 'Join'}
               </Text>
               {joinError ? <Text style={styles.errorText}>{joinError}</Text> : null}
+              {!isParticipant && isBelowMinElo ? (
+                <Text style={styles.mutedText}>
+                  Your ELO ({currentUserElo}) is below this lobby&apos;s minimum ({lobbyMinElo}).
+                </Text>
+              ) : null}
               {isParticipant ? (
                 <TouchableOpacity
                   style={[styles.leaveButton, leaving && styles.joinButtonDisabled]}
@@ -575,11 +613,19 @@ export default function LobbyDetailScreen() {
                 <TouchableOpacity
                   style={[styles.joinButton, joining && styles.joinButtonDisabled]}
                   onPress={handleJoin}
-                  disabled={joining || lobby.status !== 'open' || isLobbyFull}
+                  disabled={
+                    joining || lobby.status !== 'open' || isLobbyFull || isBelowMinElo
+                  }
                   activeOpacity={0.9}
                 >
                   <Text style={styles.joinButtonText}>
-                    {joining ? 'Joining…' : isLobbyFull ? 'Lobby full' : 'Join this lobby'}
+                    {joining
+                      ? 'Joining…'
+                      : isLobbyFull
+                        ? 'Lobby full'
+                        : isBelowMinElo
+                          ? 'ELO too low'
+                          : 'Join this lobby'}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -833,6 +879,20 @@ export default function LobbyDetailScreen() {
               onChangeText={setEditMaxPlayers}
             />
 
+            <Text style={styles.label}>Minimum ELO</Text>
+            <TextInput
+              style={styles.input}
+              keyboardType="number-pad"
+              value={editMinElo}
+              onChangeText={setEditMinElo}
+              placeholder="0"
+              placeholderTextColor={MUTED_TEXT}
+            />
+            <Text style={styles.mutedTextSmall}>
+              Cannot exceed your current ELO
+              {currentUserElo != null ? ` (${currentUserElo}).` : '.'}
+            </Text>
+
             <View style={styles.switchRow}>
               <Text style={styles.label}>Public lobby</Text>
               <Switch value={editIsPublic} onValueChange={setEditIsPublic} />
@@ -906,6 +966,12 @@ const styles = StyleSheet.create({
     marginTop: 8,
     color: 'rgba(255,255,255,0.8)',
     fontSize: 14,
+  },
+  mutedTextSmall: {
+    marginTop: 4,
+    marginBottom: 8,
+    color: MUTED_TEXT,
+    fontSize: 12,
   },
   errorText: {
     color: '#F97373',

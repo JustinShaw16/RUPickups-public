@@ -6,8 +6,17 @@ from app.models.lobby import LobbyCreate, LobbyUpdate
 from app.repositories import playerstats_repository
 
 
+def _normalize_min_elo(row: dict) -> None:
+    v = row.get("min_elo")
+    try:
+        row["min_elo"] = int(v) if v is not None else 0
+    except (TypeError, ValueError):
+        row["min_elo"] = 0
+
+
 def _enrich_lobby_row_with_participant_average_elo(row: dict) -> None:
     """Average ELO across host + all lobby_participants (from player_stats)."""
+    _normalize_min_elo(row)
     db = get_supabase_client()
     lobby_id = str(row["lobby_id"])
     host_id = str(row.get("host_user_id") or "")
@@ -135,6 +144,7 @@ def get_upcoming_lobbies_for_user(user_id: str):
                 entry["players"].add(pid)
                 entry["count"] += 1
     for row in rows:
+        _normalize_min_elo(row)
         name = row.get("lobby_name")
         if not isinstance(name, str) or not name.strip():
             row["lobby_name"] = f"{row.get('sport') or 'Pickup'} lobby"
@@ -188,6 +198,7 @@ def get_all_lobbies():
 
     # Backfill lobby_name for existing rows that predate the column
     for row in rows:
+        _normalize_min_elo(row)
         name = row.get("lobby_name")
         if not isinstance(name, str) or not name.strip():
             sport = row.get("sport") or "Pickup"
@@ -245,6 +256,7 @@ def create_lobby(*, host_user_id: str, payload: LobbyCreate) -> dict:
         "max_players": payload.max_players,
         "sport": payload.sport,
         "campus": payload.campus,
+        "min_elo": int(payload.min_elo),
     }
 
     # Remove keys with None values so database defaults can apply
@@ -287,6 +299,8 @@ def update_lobby(*, lobby_id: UUID, payload: LobbyUpdate) -> dict | None:
         update_data["is_public"] = payload.is_public
     if payload.max_players is not None:
         update_data["max_players"] = payload.max_players
+    if payload.min_elo is not None:
+        update_data["min_elo"] = int(payload.min_elo)
     if not update_data:
         return get_lobby_by_id(lobby_id)
     response = (

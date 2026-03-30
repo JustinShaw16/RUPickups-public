@@ -28,6 +28,7 @@ type Lobby = {
   scheduled_start_time: string;
   created_at: string;
   participant_count?: number | null;
+  min_elo?: number;
 };
 
 type Location = {
