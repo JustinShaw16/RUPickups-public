@@ -23,7 +23,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { API_BASE_URL, authedFetch } from '@/api/backend';
 
-const SPORT_OPTIONS = ['Basketball', 'Soccer', 'Volleyball', 'Tennis', 'Other'] as const;
+const SPORT_OPTIONS = [
+  'Basketball',
+  'Volleyball',
+  'Pickleball',
+  'Tennis',
+  'Badminton',
+  'Soccer',
+] as const;
 
 type Lobby = {
   lobby_id: string;

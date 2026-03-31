@@ -22,6 +22,16 @@ type LeaderboardUser = {
   losses: number;
 };
 
+const SPORTS = [
+  'Basketball',
+  'Volleyball',
+  'Pickleball',
+  'Tennis',
+  'Badminton',
+  'Soccer',
+] as const;
+type Sport = (typeof SPORTS)[number];
+
 const RUTGERS_RED = '#CC0033';
 const DARK_NAVY = '#111827';
 const LIGHT_GRAY = '#F9FAFB';
@@ -66,10 +76,13 @@ export default function LeaderboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sport, setSport] = useState<Sport>('Basketball');
 
-  const loadLeaderboard = async () => {
+  const loadLeaderboard = async (s: Sport) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/users/leaderboard?limit=10`);
+      const res = await fetch(
+        `${API_BASE_URL}/users/leaderboard?limit=10&sport=${encodeURIComponent(s)}`,
+      );
       if (!res.ok) {
         throw new Error(`Failed to load leaderboard (${res.status})`);
       }
@@ -86,12 +99,12 @@ export default function LeaderboardScreen() {
   };
 
   useEffect(() => {
-    loadLeaderboard();
-  }, []);
+    loadLeaderboard(sport);
+  }, [sport]);
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadLeaderboard();
+    loadLeaderboard(sport);
   };
 
   if (loading && users.length === 0) {
@@ -116,7 +129,32 @@ export default function LeaderboardScreen() {
           <MaterialIcons name="emoji-events" size={32} color="#fff" />
           <Text style={styles.title}>Leaderboard</Text>
         </View>
-        <Text style={styles.subtitle}>Top 10 players by ELO</Text>
+        <Text style={styles.subtitle}>Top 10 players by {sport} ELO</Text>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.sportTabs}
+        >
+          {SPORTS.map((s) => {
+            const selected = s === sport;
+            return (
+              <Pressable
+                key={s}
+                onPress={() => setSport(s)}
+                style={({ pressed }) => [
+                  styles.sportTab,
+                  selected && styles.sportTabSelected,
+                  pressed && styles.sportTabPressed,
+                ]}
+              >
+                <Text style={[styles.sportTabText, selected && styles.sportTabTextSelected]}>
+                  {s}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {error ? (
@@ -211,6 +249,34 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 15,
     color: 'rgba(255,255,255,0.9)',
+  },
+  sportTabs: {
+    paddingTop: 12,
+    paddingBottom: 2,
+    gap: 8,
+  },
+  sportTab: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: 'rgba(15,23,42,0.12)',
+  },
+  sportTabSelected: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#FFFFFF',
+  },
+  sportTabPressed: {
+    opacity: 0.85,
+  },
+  sportTabText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  sportTabTextSelected: {
+    color: DARK_NAVY,
   },
   center: {
     flex: 1,

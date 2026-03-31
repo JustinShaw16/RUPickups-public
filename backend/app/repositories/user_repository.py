@@ -40,8 +40,28 @@ def get_all_users():
     return [_merge_user_row_with_stats(r, stats_map) for r in rows]
 
 
-def get_leaderboard(limit: int = 10):
+def get_leaderboard(limit: int = 10, sport: str | None = None):
+    """
+    Leaderboard ranked by ELO.
+
+    If `sport` is provided, rank by that sport's ELO (default 400 if missing).
+    Otherwise, rank by the aggregated/max ELO across sports (current behavior).
+    """
     users = get_all_users()
+
+    if sport:
+        sport_name = str(sport).strip()
+        user_ids = [str(u["user_id"]) for u in users]
+        elo_map = playerstats_repository.get_sport_elo_map_by_user_ids(
+            user_ids=user_ids,
+            sport=sport_name,
+        )
+        for u in users:
+            uid = str(u["user_id"])
+            u["elo"] = int(elo_map.get(uid, playerstats_repository.DEFAULT_STARTING_ELO))
+        users.sort(key=lambda u: int(u.get("elo") or 0), reverse=True)
+        return users[:limit]
+
     users.sort(key=lambda u: int(u.get("elo") or 0), reverse=True)
     return users[:limit]
 

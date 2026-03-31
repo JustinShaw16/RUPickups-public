@@ -40,6 +40,33 @@ def get_aggregated_stats_map_by_user_ids(user_ids: list[str]) -> dict[str, dict[
     return {uid: aggregate_stats_rows(rows) for uid, rows in grouped.items()}
 
 
+def get_sport_elo_map_by_user_ids(*, user_ids: list[str], sport: str) -> dict[str, int]:
+    """
+    Returns map: user_id -> elo for a specific sport.
+
+    If a user has no row for that sport, they are omitted from the map
+    (callers should default to DEFAULT_STARTING_ELO).
+    """
+    if not user_ids:
+        return {}
+    db = get_supabase_client()
+    response = (
+        db.table("player_stats")
+        .select("user_id,elo")
+        .in_("user_id", user_ids)
+        .eq("sport", sport)
+        .execute()
+    )
+    out: dict[str, int] = {}
+    for row in response.data or []:
+        uid = str(row.get("user_id"))
+        try:
+            out[uid] = int(row.get("elo") or DEFAULT_STARTING_ELO)
+        except (TypeError, ValueError):
+            out[uid] = DEFAULT_STARTING_ELO
+    return out
+
+
 def get_all_player_stats() -> list[dict]:
     """Raw rows from player_stats (all columns)."""
     response = db.table("player_stats").select("*").execute()

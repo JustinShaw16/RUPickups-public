@@ -68,7 +68,14 @@ function normalizeCampus(campus: string): string {
   return compact;
 }
 
-const SPORT_OPTIONS = ['Basketball', 'Soccer', 'Volleyball', 'Tennis', 'Other'] as const;
+const SPORT_OPTIONS = [
+  'Basketball',
+  'Volleyball',
+  'Pickleball',
+  'Tennis',
+  'Badminton',
+  'Soccer',
+] as const;
 type TimeFilter = 'any' | 'upcoming' | 'past';
 
 export default function LobbiesScreen() {

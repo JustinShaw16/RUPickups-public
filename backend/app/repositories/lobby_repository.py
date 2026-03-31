@@ -15,11 +15,12 @@ def _normalize_min_elo(row: dict) -> None:
 
 
 def _enrich_lobby_row_with_participant_average_elo(row: dict) -> None:
-    """Average ELO across host + all lobby_participants (from player_stats)."""
+    """Average ELO across host + all lobby_participants for this lobby's sport."""
     _normalize_min_elo(row)
     db = get_supabase_client()
     lobby_id = str(row["lobby_id"])
     host_id = str(row.get("host_user_id") or "")
+    sport = str(row.get("sport") or playerstats_repository.DEFAULT_SPORT)
     p_resp = (
         db.table("lobby_participants")
         .select("player_id")
@@ -32,11 +33,13 @@ def _enrich_lobby_row_with_participant_average_elo(row: dict) -> None:
     if not players:
         row["participant_average_elo"] = None
         return
-    stats_map = playerstats_repository.get_aggregated_stats_map_by_user_ids(list(players))
+    elo_map = playerstats_repository.get_sport_elo_map_by_user_ids(
+        user_ids=list(players),
+        sport=sport,
+    )
     elos: list[int] = []
     for uid in players:
-        s = stats_map.get(uid, {"elo": playerstats_repository.DEFAULT_STARTING_ELO})
-        elos.append(int(s["elo"]))
+        elos.append(int(elo_map.get(uid, playerstats_repository.DEFAULT_STARTING_ELO)))
     row["participant_average_elo"] = round(sum(elos) / len(elos), 1)
 
 
