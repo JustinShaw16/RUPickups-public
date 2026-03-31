@@ -49,7 +49,7 @@ def insert_match_players(
                 {
                     "user_id": str(player_id),
                     "sport": sport,
-                    "matche_played": 0,
+                    "matches_played": 0,
                     "wins": 0,
                     "losses": 0,
                     "elo": DEFAULT_STARTING_ELO,
