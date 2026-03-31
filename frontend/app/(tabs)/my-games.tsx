@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 
 import { API_BASE_URL, authedFetch } from '@/api/backend';
 
@@ -129,6 +130,14 @@ export default function MyGamesScreen() {
       load();
     }
   }, [isUpcoming, load]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (isUpcoming) {
+        void load();
+      }
+    }, [isUpcoming, load])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);

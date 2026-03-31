@@ -60,8 +60,8 @@ def join_lobby(*, lobby_id: UUID, user_id: str) -> dict:
     return lobby_repository.join_lobby(lobby_id=lobby_id, player_id=user_id)
 
 
-def leave_lobby(*, lobby_id: UUID, user_id: str) -> None:
-    lobby_repository.leave_lobby(lobby_id=lobby_id, player_id=user_id)
+def leave_lobby(*, lobby_id: UUID, user_id: str) -> dict:
+    return lobby_repository.leave_lobby(lobby_id=lobby_id, player_id=user_id)
 
 
 def get_lobby_participants(lobby_id: UUID) -> list[dict]:

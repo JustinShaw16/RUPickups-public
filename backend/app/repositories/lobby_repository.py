@@ -261,11 +261,43 @@ def join_lobby(*, lobby_id: UUID, player_id: str) -> dict:
     return response.data[0]
 
 
-def leave_lobby(*, lobby_id: UUID, player_id: str) -> None:
+def leave_lobby(*, lobby_id: UUID, player_id: str) -> dict:
     db = get_supabase_client()
+    lobby = get_lobby_by_id(lobby_id)
+    host_id = str((lobby or {}).get("host_user_id") or "").strip()
+    is_host_leaving = bool(host_id) and _normalize_uuid(host_id) == _normalize_uuid(player_id)
+
     db.table("lobby_participants").delete().eq("lobby_id", str(lobby_id)).eq(
         "player_id", player_id
     ).execute()
+
+    if not is_host_leaving:
+        return {"result": "left", "new_host_user_id": None}
+
+    remaining_resp = (
+        db.table("lobby_participants")
+        .select("player_id, joined_at")
+        .eq("lobby_id", str(lobby_id))
+        .order("joined_at")
+        .order("player_id")
+        .limit(1)
+        .execute()
+    )
+    remaining_rows = remaining_resp.data or []
+
+    if not remaining_rows:
+        delete_lobby(lobby_id=lobby_id)
+        return {"result": "lobby_deleted", "new_host_user_id": None}
+
+    next_host_id = str(remaining_rows[0].get("player_id") or "").strip()
+    if not next_host_id:
+        delete_lobby(lobby_id=lobby_id)
+        return {"result": "lobby_deleted", "new_host_user_id": None}
+
+    db.table("lobby").update({"host_user_id": next_host_id}).eq(
+        "lobby_id", str(lobby_id)
+    ).execute()
+    return {"result": "host_transferred", "new_host_user_id": next_host_id}
 
 
 def get_participants_for_lobby(lobby_id: UUID) -> list[dict]:

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.auth import require_user_id
 from app.services import lobby_service
-from app.models.lobby import LobbyCreate, LobbyResponse, LobbyUpdate
+from app.models.lobby import LeaveLobbyResponse, LobbyCreate, LobbyResponse, LobbyUpdate
 
 
 router = APIRouter()
@@ -57,12 +57,12 @@ def join_lobby(lobby_id: UUID, user_id: str = Depends(require_user_id)):
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
-@router.post("/{lobby_id}/leave", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/{lobby_id}/leave", response_model=LeaveLobbyResponse)
 def leave_lobby(lobby_id: UUID, user_id: str = Depends(require_user_id)):
     lobby = lobby_service.get_lobby_by_id(lobby_id)
     if not lobby:
         raise HTTPException(status_code=404, detail="Lobby not found")
-    lobby_service.leave_lobby(lobby_id=lobby_id, user_id=user_id)
+    return lobby_service.leave_lobby(lobby_id=lobby_id, user_id=user_id)
 
 
 @router.patch("/{lobby_id}", response_model=LobbyResponse)

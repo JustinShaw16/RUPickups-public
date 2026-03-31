@@ -53,6 +53,11 @@ type Participant = {
   current_team: string | null;
 };
 
+type LeaveLobbyResult = {
+  result: 'left' | 'host_transferred' | 'lobby_deleted';
+  new_host_user_id?: string | null;
+};
+
 const RUTGERS_RED = '#CC0033';
 const DARK_NAVY = '#111827';
 const LIGHT_GRAY = '#F9FAFB';
@@ -228,7 +233,14 @@ export default function LobbyDetailScreen() {
         setJoinError(msg || 'Failed to leave lobby.');
         return;
       }
-      await loadParticipants();
+
+      const outcome = (await res.json()) as LeaveLobbyResult;
+      if (outcome.result === 'lobby_deleted') {
+        router.replace('/(tabs)/lobbies');
+        return;
+      }
+
+      await Promise.all([loadLobby(), loadParticipants()]);
     } catch (e) {
       setJoinError(e instanceof Error ? e.message : 'Failed to leave lobby.');
     } finally {

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -18,6 +18,7 @@ import DateTimePicker, {
 } from '@react-native-community/datetimepicker';
 
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 
 import { API_BASE_URL, authedFetch } from '@/api/backend';
 
@@ -97,63 +98,65 @@ export default function LobbiesScreen() {
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('any');
   const [openFilter, setOpenFilter] = useState<'sport' | 'campus' | 'time' | null>(null);
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const lobbiesRes = await fetch(`${API_BASE_URL}/lobbies`);
+  const loadLobbies = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const lobbiesRes = await fetch(`${API_BASE_URL}/lobbies`);
 
-        if (!lobbiesRes.ok) {
-          throw new Error(`Failed to load lobbies (${lobbiesRes.status})`);
-        }
-
-        const lobbiesData: Lobby[] = await lobbiesRes.json();
-        setLobbies(
-          lobbiesData.sort(
-            (a, b) =>
-              new Date(a.scheduled_start_time).getTime() -
-              new Date(b.scheduled_start_time).getTime(),
-          ),
-        );
-
-        // Load locations and current user in the background so lobbies appear faster
-        void (async () => {
-          try {
-            const locationsRes = await fetch(`${API_BASE_URL}/locations/location_manifest`);
-            if (locationsRes.ok) {
-              const locationsData: Location[] = await locationsRes.json();
-              setLocations(locationsData);
-            }
-          } catch {
-            // ignore location errors for the main lobbies list
-          }
-        })();
-
-        void (async () => {
-          try {
-            const meRes = await authedFetch('/users/me');
-            if (meRes.ok) {
-              const me = (await meRes.json()) as { user_id: string };
-              setCurrentUserId(me.user_id);
-            }
-          } catch {
-            // ignore user loading errors; lobbies list still works
-          }
-        })();
-      } catch (e) {
-        if (e instanceof Error) {
-          setError(e.message);
-        } else {
-          setError('Failed to load lobbies.');
-        }
-      } finally {
-        setLoading(false);
+      if (!lobbiesRes.ok) {
+        throw new Error(`Failed to load lobbies (${lobbiesRes.status})`);
       }
-    };
 
-    void load();
+      const lobbiesData: Lobby[] = await lobbiesRes.json();
+      setLobbies(
+        lobbiesData.sort(
+          (a, b) =>
+            new Date(a.scheduled_start_time).getTime() -
+            new Date(b.scheduled_start_time).getTime(),
+        ),
+      );
+
+      // Load locations and current user in the background so lobbies appear faster
+      void (async () => {
+        try {
+          const locationsRes = await fetch(`${API_BASE_URL}/locations/location_manifest`);
+          if (locationsRes.ok) {
+            const locationsData: Location[] = await locationsRes.json();
+            setLocations(locationsData);
+          }
+        } catch {
+          // ignore location errors for the main lobbies list
+        }
+      })();
+
+      void (async () => {
+        try {
+          const meRes = await authedFetch('/users/me');
+          if (meRes.ok) {
+            const me = (await meRes.json()) as { user_id: string };
+            setCurrentUserId(me.user_id);
+          }
+        } catch {
+          // ignore user loading errors; lobbies list still works
+        }
+      })();
+    } catch (e) {
+      if (e instanceof Error) {
+        setError(e.message);
+      } else {
+        setError('Failed to load lobbies.');
+      }
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadLobbies();
+    }, [loadLobbies])
+  );
 
   const resetCreateState = () => {
     setLobbyName('');

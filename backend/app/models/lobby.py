@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from uuid import UUID
 
@@ -42,4 +42,9 @@ class LobbyResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class LeaveLobbyResponse(BaseModel):
+    result: Literal["left", "host_transferred", "lobby_deleted"]
+    new_host_user_id: UUID | None = None
 
