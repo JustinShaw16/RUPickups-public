@@ -129,6 +129,7 @@ create table if not exists public.lobby_participants (
   lobby_id uuid not null references public.lobby(lobby_id) on delete cascade,
   player_id uuid not null references public.users(user_id) on delete cascade, 
 
+  joined_at timestamptz not null default now(),
   is_ready boolean not null default false,
 
   current_team text,

@@ -105,6 +105,7 @@ Tracks which players are in each lobby and their readiness status.
 **Fields:**
 - `lobby_id` (UUID, PK, FK → lobby) - Which lobby
 - `player_id` (UUID, PK, FK → users) - Which player
+- `joined_at` (timestamptz, default: now()) - When the player joined the lobby
 - `is_ready` (boolean, default: false) - Player confirmed they're ready
 - `current_team` (text, nullable) - Assigned team (e.g., "team_a", "team_b")
 
