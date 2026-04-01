@@ -19,9 +19,6 @@ import { Colors } from '@/constants/theme';
 type UserMe = {
   user_id: string;
   username: string;
-  elo: number;
-  wins: number;
-  losses: number;
 };
 
 
@@ -123,12 +120,6 @@ export function Sidebar({ onClose }: SidebarProps) {
                 {user?.username ?? 'Player'}
               </ThemedText>
             </Pressable>
-            <ThemedText style={styles.elo}>
-              Elo: {user?.elo ?? 0}
-            </ThemedText>
-            <ThemedText style={styles.stats}>
-              Wins: {user?.wins ?? 0} · Losses: {user?.losses ?? 0}
-            </ThemedText>
           </>
         )}
       </View>
@@ -200,17 +191,6 @@ const styles = StyleSheet.create({
   username: {
     textAlign: 'center',
     marginBottom: 4,
-  },
-  elo: {
-    textAlign: 'center',
-    fontSize: 17,
-    marginBottom: 4,
-    opacity: 0.9,
-  },
-  stats: {
-    fontSize: 13,
-    textAlign: 'center',
-    opacity: 0.9,
   },
   links: {
     gap: 8,

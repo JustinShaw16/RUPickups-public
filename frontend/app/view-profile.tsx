@@ -1,6 +1,6 @@
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -28,6 +28,42 @@ type User = {
   losses: number;
 };
 
+const SPORTS = [
+  'Basketball',
+  'Volleyball',
+  'Pickleball',
+  'Tennis',
+  'Badminton',
+  'Soccer',
+] as const;
+type Sport = (typeof SPORTS)[number];
+
+type SportStatsRow = { sport: string; elo: number; wins: number; losses: number };
+
+const DEFAULT_SPORT_STATS = { elo: 400, wins: 0, losses: 0 };
+
+function buildSportStatsMap(rows: SportStatsRow[]): Record<string, { elo: number; wins: number; losses: number }> {
+  const m: Record<string, { elo: number; wins: number; losses: number }> = {};
+  for (const r of rows) {
+    if (!r.sport) continue;
+    m[r.sport] = { elo: r.elo, wins: r.wins, losses: r.losses };
+  }
+  return m;
+}
+
+function statsForSport(
+  map: Record<string, { elo: number; wins: number; losses: number }>,
+  sport: Sport,
+) {
+  return map[sport] ?? DEFAULT_SPORT_STATS;
+}
+
+function winRateLabel(wins: number, losses: number): string {
+  const total = wins + losses;
+  if (total === 0) return '0%';
+  return `${Math.round((wins / total) * 100)}%`;
+}
+
 const palette = profilePalette;
 
 export default function ViewProfileScreen() {
@@ -36,6 +72,10 @@ export default function ViewProfileScreen() {
   const isWide = width >= 950;
 
   const [user, setUser] = useState<User | null>(null);
+  const [sportStatsMap, setSportStatsMap] = useState<
+    Record<string, { elo: number; wins: number; losses: number }>
+  >({});
+  const [selectedSport, setSelectedSport] = useState<Sport>('Basketball');
   const [loading, setLoading] = useState(true);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,24 +86,34 @@ export default function ViewProfileScreen() {
       setError(null);
 
       try {
-        const res = await authedFetch('/users/me');
+        const [meRes, sportRes] = await Promise.all([
+          authedFetch('/users/me'),
+          authedFetch('/users/me/sport-stats'),
+        ]);
 
-        if (!res.ok) {
-          if (res.status === 401) {
+        if (!meRes.ok) {
+          if (meRes.status === 401) {
             router.replace('/login');
             return;
           }
 
-          if (res.status === 404) {
+          if (meRes.status === 404) {
             if (isActive()) setError('No profile found.');
             return;
           }
 
-          throw new Error(`Failed to load profile (${res.status})`);
+          throw new Error(`Failed to load profile (${meRes.status})`);
         }
 
-        const data = (await res.json()) as User;
+        const data = (await meRes.json()) as User;
         if (isActive()) setUser(data);
+
+        if (sportRes.ok && isActive()) {
+          const rows = (await sportRes.json()) as SportStatsRow[];
+          setSportStatsMap(buildSportStatsMap(rows));
+        } else if (isActive()) {
+          setSportStatsMap({});
+        }
       } catch (e) {
         const msg = String(e || '');
 
@@ -94,19 +144,6 @@ export default function ViewProfileScreen() {
       };
     }, [loadProfile])
   );
-
-  // winRate 
-  const winRate = useMemo(() => {
-    if (!user) return '—';
-    const total = user.wins + user.losses;
-    if (total === 0) return 'No games yet';
-    return `${Math.round((user.wins / total) * 100)}%`;
-  }, [user]);
-
-  const totalGames = useMemo(() => {
-    if (!user) return 0;
-    return user.wins + user.losses;
-  }, [user]);
 
   const handleLogout = async () => {
     try {
@@ -213,30 +250,57 @@ export default function ViewProfileScreen() {
                   </View>
 
                   <View style={styles.profileDetailsCard}>
-                    <Text style={styles.sectionTitle}>Performance</Text>
+                    <Text style={styles.sectionTitle}>Performance by sport</Text>
 
-                    <View style={styles.statGrid}>
-                      <View style={styles.statCard}>
-                        <Text style={styles.statNumber}>{user.elo}</Text>
-                        <Text style={styles.statLabel}>Current ELO</Text>
-                      </View>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.sportTabs}
+                    >
+                      {SPORTS.map((s) => {
+                        const selected = s === selectedSport;
+                        return (
+                          <Pressable
+                            key={s}
+                            onPress={() => setSelectedSport(s)}
+                            style={({ pressed }) => [
+                              styles.sportTab,
+                              selected && styles.sportTabSelected,
+                              pressed && styles.sportTabPressed,
+                            ]}
+                          >
+                            <Text style={[styles.sportTabText, selected && styles.sportTabTextSelected]}>
+                              {s}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
 
-                      <View style={styles.statCard}>
-                        <Text style={styles.statNumber}>{user.wins}</Text>
-                        <Text style={styles.statLabel}>Wins</Text>
-                      </View>
-
-                      <View style={styles.statCard}>
-                        <Text style={styles.statNumber}>{user.losses}</Text>
-                        <Text style={styles.statLabel}>Losses</Text>
-                      </View>
-
-                      {/*  winRate is always a string*/}
-                      <View style={styles.statCard}>
-                        <Text style={styles.statNumber}>{winRate}</Text>
-                        <Text style={styles.statLabel}>Win Rate</Text>
-                      </View>
-                    </View>
+                    {(() => {
+                      const st = statsForSport(sportStatsMap, selectedSport);
+                      const wr = winRateLabel(st.wins, st.losses);
+                      return (
+                        <View style={styles.statGrid}>
+                          <View style={styles.statCard}>
+                            <Text style={styles.statNumber}>{st.elo}</Text>
+                            <Text style={styles.statLabel}>ELO</Text>
+                          </View>
+                          <View style={styles.statCard}>
+                            <Text style={styles.statNumber}>{st.wins}</Text>
+                            <Text style={styles.statLabel}>Wins</Text>
+                          </View>
+                          <View style={styles.statCard}>
+                            <Text style={styles.statNumber}>{st.losses}</Text>
+                            <Text style={styles.statLabel}>Losses</Text>
+                          </View>
+                          <View style={styles.statCard}>
+                            <Text style={styles.statNumber}>{wr}</Text>
+                            <Text style={styles.statLabel}>Win rate</Text>
+                          </View>
+                        </View>
+                      );
+                    })()}
 
                     <View style={styles.eloNoteCard}>
                       <View style={styles.eloNoteIcon}>
@@ -295,31 +359,6 @@ export default function ViewProfileScreen() {
               </View>
 
               <View style={[styles.sidePanel, isWide && styles.sidePanelWide]}>
-                <View style={styles.sideCard}>
-                  <Text style={styles.sideCardTitle}>Quick Summary</Text>
-
-                  <View style={styles.summaryItem}>
-                    <Text style={styles.summaryLabel}>Total Games</Text>
-                    <Text style={styles.summaryValue}>{totalGames}</Text>
-                  </View>
-
-                  <View style={styles.summaryDivider} />
-
-                  <View style={styles.summaryItem}>
-                    <Text style={styles.summaryLabel}>Current ELO</Text>
-                    <Text style={styles.summaryValue}>{user.elo}</Text>
-                  </View>
-
-                  <View style={styles.summaryDivider} />
-
-                  <View style={styles.summaryItem}>
-                    <Text style={styles.summaryLabel}>Record</Text>
-                    <Text style={styles.summaryValue}>
-                      {user.wins}W - {user.losses}L
-                    </Text>
-                  </View>
-                </View>
-
                 <View style={styles.sideCard}>
                   <Text style={styles.sideCardTitle}>Profile Notes</Text>
                   <Text style={styles.sideCardBody}>
@@ -558,6 +597,35 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: palette.text,
   },
+  sportTabs: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingVertical: 10,
+    paddingRight: 4,
+  },
+  sportTab: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: '#FFFFFF',
+  },
+  sportTabSelected: {
+    backgroundColor: palette.accent,
+    borderColor: palette.accent,
+  },
+  sportTabPressed: {
+    opacity: 0.85,
+  },
+  sportTabText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: palette.text,
+  },
+  sportTabTextSelected: {
+    color: '#FFFFFF',
+  },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -713,27 +781,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 22,
     color: palette.muted,
-  },
-  summaryItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 28,
-  },
-  summaryLabel: {
-    fontSize: 14,
-    color: palette.muted,
-    fontWeight: '600',
-  },
-  summaryValue: {
-    fontSize: 15,
-    color: palette.text,
-    fontWeight: '700',
-  },
-  summaryDivider: {
-    height: 1,
-    backgroundColor: '#F3D3DD',
-    marginVertical: 12,
   },
   sideButton: {
     marginTop: 16,

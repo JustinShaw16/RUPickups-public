@@ -29,3 +29,10 @@ class PublicUserResponse(BaseModel):
     elo: int
     wins: int
     losses: int
+
+
+class SportStatsEntry(BaseModel):
+    sport: str
+    elo: int = Field(ge=0)
+    wins: int = Field(ge=0)
+    losses: int = Field(ge=0)

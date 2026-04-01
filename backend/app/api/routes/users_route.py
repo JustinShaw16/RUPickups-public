@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.auth import require_user_id
-from app.models.users import PublicUserResponse, UserCreate, UserResponse
+from app.models.users import PublicUserResponse, SportStatsEntry, UserCreate, UserResponse
 from app.services import users_service
 
 router = APIRouter()
@@ -23,6 +23,12 @@ def read_me(user_id: str = Depends(require_user_id)):
             detail="User profile not found"
         )
     return user
+
+
+@router.get("/me/sport-stats", response_model=list[SportStatsEntry])
+def read_my_sport_stats(user_id: str = Depends(require_user_id)):
+    return users_service.get_my_sport_stats(user_id)
+
 
 @router.get("/{user_id}", response_model=PublicUserResponse)
 def read_user(user_id: str, _: str = Depends(require_user_id)):

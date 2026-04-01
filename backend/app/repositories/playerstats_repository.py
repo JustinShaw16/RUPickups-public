@@ -73,6 +73,18 @@ def get_all_player_stats() -> list[dict]:
     return response.data or []
 
 
+def get_sport_stats_rows_for_user(user_id: str) -> list[dict]:
+    """Per-sport ELO and record for one user (columns that exist on player_stats)."""
+    db = get_supabase_client()
+    response = (
+        db.table("player_stats")
+        .select("sport,elo,wins,losses")
+        .eq("user_id", str(user_id).strip())
+        .execute()
+    )
+    return response.data or []
+
+
 def ensure_basketball_rows_for_user_ids(user_ids: list[str]) -> None:
     """
     Insert a Basketball player_stats row (elo 400, 0W / 0L) for any user_id that

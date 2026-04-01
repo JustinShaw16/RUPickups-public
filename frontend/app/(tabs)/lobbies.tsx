@@ -95,7 +95,8 @@ export default function LobbiesScreen() {
   const [locationId, setLocationId] = useState<string | null>(null);
   const [maxPlayers, setMaxPlayers] = useState<string>('10');
   const [minEloInput, setMinEloInput] = useState<string>('');
-  const [myElo, setMyElo] = useState<number | null>(null);
+  /** Per-sport ELO from `player_stats` (same as backend lobby min_elo cap). */
+  const [sportEloBySport, setSportEloBySport] = useState<Record<string, number>>({});
   const [isPublic, setIsPublic] = useState<boolean>(true);
   const [scheduledAt, setScheduledAt] = useState<Date>(() => {
     const d = new Date();
@@ -148,11 +149,24 @@ export default function LobbiesScreen() {
 
         void (async () => {
           try {
-            const meRes = await authedFetch('/users/me');
+            const [meRes, sportStatsRes] = await Promise.all([
+              authedFetch('/users/me'),
+              authedFetch('/users/me/sport-stats'),
+            ]);
             if (meRes.ok) {
-              const me = (await meRes.json()) as { user_id: string; elo: number };
+              const me = (await meRes.json()) as { user_id: string };
               setCurrentUserId(me.user_id);
-              setMyElo(typeof me.elo === 'number' ? me.elo : null);
+            }
+            if (sportStatsRes.ok) {
+              const rows = (await sportStatsRes.json()) as {
+                sport: string;
+                elo: number;
+              }[];
+              const map: Record<string, number> = {};
+              for (const r of rows) {
+                if (r.sport && typeof r.elo === 'number') map[r.sport] = r.elo;
+              }
+              setSportEloBySport(map);
             }
           } catch {
             // ignore user loading errors; lobbies list still works
@@ -328,6 +342,13 @@ export default function LobbiesScreen() {
     });
   }, [lobbies, locations, sportFilter, campusFilter, timeFilter]);
 
+  const myEloForSelectedSport = useMemo(() => {
+    const s = sport.trim();
+    if (!s) return null;
+    const v = sportEloBySport[s];
+    return typeof v === 'number' ? v : 400;
+  }, [sport, sportEloBySport]);
+
   const handleCreateLobby = async () => {
     setCreateError(null);
 
@@ -360,8 +381,14 @@ export default function LobbiesScreen() {
         setCreateError('Minimum ELO must be a non-negative whole number.');
         return;
       }
-      if (myElo != null && minElo > myElo) {
-        setCreateError(`Minimum ELO cannot be higher than your current ELO (${myElo}).`);
+      const cap =
+        typeof sportEloBySport[trimmedSport] === 'number'
+          ? sportEloBySport[trimmedSport]
+          : 400;
+      if (minElo > cap) {
+        setCreateError(
+          `Minimum ELO cannot be higher than your ${trimmedSport} ELO (${cap}).`,
+        );
         return;
       }
     }
@@ -869,9 +896,10 @@ export default function LobbiesScreen() {
               placeholderTextColor={MUTED_TEXT}
             />
             <Text style={styles.mutedTextSmall}>
-              Only players at or above this ELO can join. Leave blank for 0. Cannot exceed your
-              current ELO
-              {myElo != null ? ` (${myElo}).` : '.'}
+              Only players at or above this ELO can join. Leave blank for 0.
+              {sport.trim()
+                ? ` Cannot exceed your ${sport.trim()} ELO (${myEloForSelectedSport ?? 400}).`
+                : ' Select a sport to see your ELO cap for this lobby.'}
             </Text>
 
             <View style={styles.switchRow}>

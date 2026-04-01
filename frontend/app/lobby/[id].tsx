@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -87,7 +87,8 @@ export default function LobbyDetailScreen() {
   const [leaving, setLeaving] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [currentUserElo, setCurrentUserElo] = useState<number | null>(null);
+  /** Your ELO per sport from `player_stats` (matches backend lobby rules). */
+  const [sportEloBySport, setSportEloBySport] = useState<Record<string, number>>({});
 
   const [editOpen, setEditOpen] = useState(false);
   const [editLobbyName, setEditLobbyName] = useState('');
@@ -150,14 +151,29 @@ export default function LobbyDetailScreen() {
 
   const loadCurrentUser = useCallback(async () => {
     try {
-      const res = await authedFetch('/users/me');
-      if (!res.ok) return;
-      const data = (await res.json()) as { user_id: string; elo: number };
-      setCurrentUserId(data.user_id);
-      setCurrentUserElo(typeof data.elo === 'number' ? data.elo : null);
+      const [meRes, sportRes] = await Promise.all([
+        authedFetch('/users/me'),
+        authedFetch('/users/me/sport-stats'),
+      ]);
+      if (meRes.ok) {
+        const data = (await meRes.json()) as { user_id: string };
+        setCurrentUserId(data.user_id);
+      } else {
+        setCurrentUserId(null);
+      }
+      if (sportRes.ok) {
+        const rows = (await sportRes.json()) as { sport: string; elo: number }[];
+        const map: Record<string, number> = {};
+        for (const r of rows) {
+          if (r.sport && typeof r.elo === 'number') map[r.sport] = r.elo;
+        }
+        setSportEloBySport(map);
+      } else {
+        setSportEloBySport({});
+      }
     } catch {
       setCurrentUserId(null);
-      setCurrentUserElo(null);
+      setSportEloBySport({});
     }
   }, []);
 
@@ -304,8 +320,20 @@ export default function LobbyDetailScreen() {
       participants.some((p) => p.player_id === currentUserId));
   const isLobbyFull = !!lobby && participants.length >= lobby.max_players;
   const lobbyMinElo = lobby?.min_elo ?? 0;
+  const myEloForLobbySport = useMemo(() => {
+    if (!lobby?.sport) return 400;
+    const v = sportEloBySport[lobby.sport];
+    return typeof v === 'number' ? v : 400;
+  }, [lobby?.sport, sportEloBySport]);
   const isBelowMinElo =
-    currentUserElo != null && lobby != null && currentUserElo < lobbyMinElo;
+    lobbyMinElo > 0 && lobby != null && myEloForLobbySport < lobbyMinElo;
+
+  const myEloForEditSport = useMemo(() => {
+    const s = editSport.trim();
+    if (!s) return null;
+    const v = sportEloBySport[s];
+    return typeof v === 'number' ? v : 400;
+  }, [editSport, sportEloBySport]);
 
   const openEdit = useCallback(() => {
     if (!lobby) return;
@@ -396,8 +424,14 @@ export default function LobbyDetailScreen() {
         setEditError('Minimum ELO must be a non-negative whole number.');
         return;
       }
-      if (currentUserElo != null && minElo > currentUserElo) {
-        setEditError(`Minimum ELO cannot be higher than your current ELO (${currentUserElo}).`);
+      const cap =
+        typeof sportEloBySport[editSport.trim()] === 'number'
+          ? sportEloBySport[editSport.trim()]
+          : 400;
+      if (minElo > cap) {
+        setEditError(
+          `Minimum ELO cannot be higher than your ${editSport.trim()} ELO (${cap}).`,
+        );
         return;
       }
     }
@@ -602,7 +636,8 @@ export default function LobbyDetailScreen() {
               {joinError ? <Text style={styles.errorText}>{joinError}</Text> : null}
               {!isParticipant && isBelowMinElo ? (
                 <Text style={styles.mutedText}>
-                  Your ELO ({currentUserElo}) is below this lobby&apos;s minimum ({lobbyMinElo}).
+                  Your {lobby.sport} ELO ({myEloForLobbySport}) is below this lobby&apos;s minimum (
+                  {lobbyMinElo}).
                 </Text>
               ) : null}
               {isParticipant ? (
@@ -896,8 +931,9 @@ export default function LobbyDetailScreen() {
               placeholderTextColor={MUTED_TEXT}
             />
             <Text style={styles.mutedTextSmall}>
-              Cannot exceed your current ELO
-              {currentUserElo != null ? ` (${currentUserElo}).` : '.'}
+              {editSport.trim()
+                ? `Cannot exceed your ${editSport.trim()} ELO (${myEloForEditSport ?? 400}).`
+                : 'Select a sport to see your ELO cap.'}
             </Text>
 
             <View style={styles.switchRow}>
