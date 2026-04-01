@@ -38,8 +38,6 @@ type Location = {
   address: string;
 };
 
-type GamesTab = 'upcoming' | 'previous';
-
 const RUTGERS_RED = '#CC0033';
 const DARK_NAVY = '#111827';
 const LIGHT_GRAY = '#F9FAFB';
@@ -67,15 +65,12 @@ function formatTimeOnly(iso: string): string {
 
 export default function MyGamesScreen() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<GamesTab>('upcoming');
   const [upcomingLobbies, setUpcomingLobbies] = useState<Lobby[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const isUpcoming = activeTab === 'upcoming';
 
   const load = useCallback(async () => {
     try {
@@ -127,10 +122,8 @@ export default function MyGamesScreen() {
   }, []);
 
   useEffect(() => {
-    if (isUpcoming) {
-      load();
-    }
-  }, [isUpcoming, load]);
+    void load();
+  }, [load]);
 
   useFocusEffect(
     useCallback(() => {
@@ -152,125 +145,96 @@ export default function MyGamesScreen() {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         <Text style={styles.heading}>My games</Text>
+        <Text style={styles.subheading}>Upcoming</Text>
 
-        <View style={styles.tabsContainer}>
-          <TouchableOpacity
-            style={[styles.tab, isUpcoming && styles.tabActive]}
-            onPress={() => setActiveTab('upcoming')}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.tabText, isUpcoming && styles.tabTextActive]}>
-              Upcoming Games
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, !isUpcoming && styles.tabActive]}
-            onPress={() => setActiveTab('previous')}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.tabText, !isUpcoming && styles.tabTextActive]}>
-              Previous Games
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {isUpcoming ? (
-          loading && upcomingLobbies.length === 0 ? (
-            <View style={styles.center}>
-              <ActivityIndicator size="large" color="#fff" />
-              <Text style={styles.mutedText}>Loading your games…</Text>
-            </View>
-          ) : error ? (
-            <View style={styles.center}>
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          ) : upcomingLobbies.length === 0 ? (
-            <View style={styles.card}>
-              <Text style={styles.emptyTitle}>No upcoming games</Text>
-              <Text style={styles.emptySubtitle}>
-                Join a lobby from the Lobbies tab or create one to see your games here.
-              </Text>
-              <TouchableOpacity
-                style={styles.primaryButton}
-                onPress={() => router.push('/(tabs)/lobbies')}
-                activeOpacity={0.9}
-              >
-                <Text style={styles.primaryButtonText}>Find a game</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <ScrollView
-              style={styles.scroll}
-              contentContainerStyle={styles.scrollContent}
-              refreshControl={
-                <RefreshControl
-                  refreshing={refreshing}
-                  onRefresh={onRefresh}
-                  tintColor="#fff"
-                />
-              }
-            >
-              {upcomingLobbies.map((lobby) => {
-                const loc = locationForLobby(lobby);
-                const isHost = currentUserId === lobby.host_user_id;
-                const dateLabel = formatDateOnly(lobby.scheduled_start_time);
-                const timeLabel = formatTimeOnly(lobby.scheduled_start_time);
-
-                return (
-                  <Pressable
-                    key={lobby.lobby_id}
-                    style={({ pressed }) => [
-                      styles.gameCard,
-                      pressed && styles.gameCardPressed,
-                    ]}
-                    onPress={() => router.push(`/lobby/${lobby.lobby_id}`)}
-                  >
-                    <View style={styles.dateTimeBlock}>
-                      <Text style={styles.dateText}>{dateLabel}</Text>
-                      <Text style={styles.timeText}>{timeLabel}</Text>
-                    </View>
-                    <View style={styles.gameCardBody}>
-                      <View style={styles.gameCardHeader}>
-                        <Text style={styles.lobbyName}>{lobby.lobby_name}</Text>
-                        {isHost && (
-                          <View style={styles.hostPill}>
-                            <Text style={styles.hostPillText}>Host</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={styles.sportText}>{lobby.sport}</Text>
-                      <Text style={styles.campusText}>{lobby.campus}</Text>
-                      {loc ? (
-                        <Text style={styles.locationText}>{loc.name}</Text>
-                      ) : null}
-                      <View style={styles.metaRow}>
-                        <Text style={styles.metaText}>
-                          {(lobby.participant_count ?? 0)}/{lobby.max_players} players
-                        </Text>
-                        <View
-                          style={[
-                            styles.statusPill,
-                            lobby.status.toLowerCase() !== 'open' && styles.statusPillMuted,
-                          ]}
-                        >
-                          <Text style={styles.statusPillText}>
-                            {lobby.status.charAt(0).toUpperCase() + lobby.status.slice(1)}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          )
-        ) : (
-          <View style={styles.card}>
-            <Text style={styles.emptyTitle}>Previous Games</Text>
-            <Text style={styles.emptySubtitle}>
-              It looks like you don&apos;t have any previous games yet!
-            </Text>
+        {loading && upcomingLobbies.length === 0 ? (
+          <View style={styles.center}>
+            <ActivityIndicator size="large" color="#fff" />
+            <Text style={styles.mutedText}>Loading your games…</Text>
           </View>
+        ) : error ? (
+          <View style={styles.center}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : upcomingLobbies.length === 0 ? (
+          <View style={styles.card}>
+            <Text style={styles.emptyTitle}>No upcoming games</Text>
+            <Text style={styles.emptySubtitle}>
+              Join a lobby from the Lobbies tab or create one to see your games here.
+            </Text>
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={() => router.push('/(tabs)/lobbies')}
+              activeOpacity={0.9}
+            >
+              <Text style={styles.primaryButtonText}>Find a game</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.scrollContent}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor="#fff"
+              />
+            }
+          >
+            {upcomingLobbies.map((lobby) => {
+              const loc = locationForLobby(lobby);
+              const isHost = currentUserId === lobby.host_user_id;
+              const dateLabel = formatDateOnly(lobby.scheduled_start_time);
+              const timeLabel = formatTimeOnly(lobby.scheduled_start_time);
+
+              return (
+                <Pressable
+                  key={lobby.lobby_id}
+                  style={({ pressed }) => [
+                    styles.gameCard,
+                    pressed && styles.gameCardPressed,
+                  ]}
+                  onPress={() => router.push(`/lobby/${lobby.lobby_id}`)}
+                >
+                  <View style={styles.dateTimeBlock}>
+                    <Text style={styles.dateText}>{dateLabel}</Text>
+                    <Text style={styles.timeText}>{timeLabel}</Text>
+                  </View>
+                  <View style={styles.gameCardBody}>
+                    <View style={styles.gameCardHeader}>
+                      <Text style={styles.lobbyName}>{lobby.lobby_name}</Text>
+                      {isHost && (
+                        <View style={styles.hostPill}>
+                          <Text style={styles.hostPillText}>Host</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.sportText}>{lobby.sport}</Text>
+                    <Text style={styles.campusText}>{lobby.campus}</Text>
+                    {loc ? (
+                      <Text style={styles.locationText}>{loc.name}</Text>
+                    ) : null}
+                    <View style={styles.metaRow}>
+                      <Text style={styles.metaText}>
+                        {(lobby.participant_count ?? 0)}/{lobby.max_players} players
+                      </Text>
+                      <View
+                        style={[
+                          styles.statusPill,
+                          lobby.status.toLowerCase() !== 'open' && styles.statusPillMuted,
+                        ]}
+                      >
+                        <Text style={styles.statusPillText}>
+                          {lobby.status.charAt(0).toUpperCase() + lobby.status.slice(1)}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
         )}
       </View>
     </SafeAreaView>
@@ -292,38 +256,13 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     color: '#FFFFFF',
-    marginBottom: 20,
+    marginBottom: 6,
   },
-  tabsContainer: {
-    flexDirection: 'row',
-    alignSelf: 'center',
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    borderRadius: 999,
-    padding: 4,
-    marginBottom: 20,
-  },
-  tab: {
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    borderRadius: 999,
-    minWidth: 130,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tabActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-  },
-  tabText: {
-    fontSize: 14,
+  subheading: {
+    fontSize: 15,
     fontWeight: '600',
-    color: 'rgba(255,255,255,0.9)',
-  },
-  tabTextActive: {
-    color: DARK_NAVY,
+    color: 'rgba(255,255,255,0.88)',
+    marginBottom: 18,
   },
   center: {
     flex: 1,
