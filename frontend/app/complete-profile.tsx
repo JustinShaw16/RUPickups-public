@@ -103,7 +103,7 @@ export default function CompleteProfile() {
     return
     }
 
-      router.replace('/(tabs)')
+      router.replace('/(tabs)/lobbies')
     } catch {
       setGlobalError('Profile setup failed. Please try again.')
     } finally {

@@ -98,7 +98,7 @@ export default function Login() {
         }
       }
 
-      router.replace('/(tabs)')
+      router.replace('/(tabs)/lobbies')
     } catch (e) {
       setGlobalError('Something went wrong. Please try again.')
     } finally {
