@@ -261,10 +261,17 @@ def join_lobby(*, lobby_id: UUID, player_id: str) -> dict:
     return response.data[0]
 
 
-def leave_lobby(*, lobby_id: UUID, player_id: str) -> dict:
+def leave_lobby(*, lobby_id: UUID, player_id: str, host_user_id: str) -> dict:
+    """
+    Remove player from lobby_participants. If the leaver is the host, either transfer
+    host to the earliest joined_at participant or delete the lobby if none remain.
+
+    Note: Multiple Supabase round-trips are not one atomic transaction. Concurrent
+    leaves could theoretically race (e.g. next host selected then leaves before update).
+    A future improvement is a single Postgres function with row locking (SELECT FOR UPDATE).
+    """
     db = get_supabase_client()
-    lobby = get_lobby_by_id(lobby_id)
-    host_id = str((lobby or {}).get("host_user_id") or "").strip()
+    host_id = str(host_user_id or "").strip()
     is_host_leaving = bool(host_id) and _normalize_uuid(host_id) == _normalize_uuid(player_id)
 
     db.table("lobby_participants").delete().eq("lobby_id", str(lobby_id)).eq(

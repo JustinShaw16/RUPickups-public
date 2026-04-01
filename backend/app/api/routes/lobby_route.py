@@ -62,7 +62,11 @@ def leave_lobby(lobby_id: UUID, user_id: str = Depends(require_user_id)):
     lobby = lobby_service.get_lobby_by_id(lobby_id)
     if not lobby:
         raise HTTPException(status_code=404, detail="Lobby not found")
-    return lobby_service.leave_lobby(lobby_id=lobby_id, user_id=user_id)
+    return lobby_service.leave_lobby(
+        lobby_id=lobby_id,
+        user_id=user_id,
+        host_user_id=str(lobby.get("host_user_id") or ""),
+    )
 
 
 @router.patch("/{lobby_id}", response_model=LobbyResponse)
