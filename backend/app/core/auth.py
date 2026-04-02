@@ -16,3 +16,16 @@ def require_user_id(creds: HTTPAuthorizationCredentials = Depends(bearer)) -> st
         return res.user.id
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+
+def optional_user_id(creds: HTTPAuthorizationCredentials = Depends(bearer)) -> str | None:
+    """Like require_user_id, but returns None when missing/invalid (for optional-auth routes)."""
+    if not creds or not creds.credentials:
+        return None
+    token = creds.credentials
+    supabase = get_supabase_client()
+    try:
+        res = supabase.auth.get_user(token)
+        return res.user.id
+    except Exception:
+        return None

@@ -21,7 +21,8 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { API_BASE_URL, authedFetch } from '@/api/backend';
+import { API_BASE_URL, authedFetch, authedFetchForLobby } from '@/api/backend';
+import { setLobbyUnlockTokenSync } from '@/api/lobbyUnlock';
 
 const SPORT_OPTIONS = [
   'Basketball',
@@ -45,6 +46,8 @@ type Lobby = {
   scheduled_start_time: string;
   created_at: string;
   participant_average_elo?: number | null;
+  participant_count?: number | null;
+  participant_details_hidden?: boolean;
   min_elo?: number;
 };
 
@@ -104,11 +107,19 @@ export default function LobbyDetailScreen() {
   const [showEditPicker, setShowEditPicker] = useState(false);
   const [editAndroidPickerStep, setEditAndroidPickerStep] = useState<'date' | 'time'>('date');
   const [creatingMatch, setCreatingMatch] = useState(false);
+  const [joinPasswordModalOpen, setJoinPasswordModalOpen] = useState(false);
+  const [joinPassword, setJoinPassword] = useState('');
+  const [joinUnlockBusy, setJoinUnlockBusy] = useState(false);
+  const [joinUnlockError, setJoinUnlockError] = useState<string | null>(null);
+
+  const [initialEditWasPublic, setInitialEditWasPublic] = useState(true);
+  const [editPrivatePassword, setEditPrivatePassword] = useState('');
+  const [editPrivatePasswordConfirm, setEditPrivatePasswordConfirm] = useState('');
 
   const loadLobby = useCallback(async () => {
     if (!id) return;
     try {
-      const res = await authedFetch(`/lobbies/${id}`);
+      const res = await authedFetchForLobby(id, `/lobbies/${id}`);
       if (!res.ok) {
         if (res.status === 404) {
           setError('Lobby not found.');
@@ -129,7 +140,11 @@ export default function LobbyDetailScreen() {
   const loadParticipants = useCallback(async () => {
     if (!id) return;
     try {
-      const res = await authedFetch(`/lobbies/${id}/participants`);
+      const res = await authedFetchForLobby(id, `/lobbies/${id}/participants`);
+      if (res.status === 403) {
+        setParticipants([]);
+        return;
+      }
       if (!res.ok) return;
       const data = (await res.json()) as Participant[];
       setParticipants(data);
@@ -225,12 +240,12 @@ export default function LobbyDetailScreen() {
     }
   };
 
-  const handleJoin = async () => {
-    if (!id || joining) return;
+  const attemptJoin = async () => {
+    if (!id) return;
     setJoinError(null);
     setJoining(true);
     try {
-      const res = await authedFetch(`/lobbies/${id}/join`, { method: 'POST' });
+      const res = await authedFetchForLobby(id, `/lobbies/${id}/join`, { method: 'POST' });
       if (res.status === 409) {
         const detail = await readErrorDetail(res);
         const isFull = detail.toLowerCase().includes('full');
@@ -248,11 +263,85 @@ export default function LobbyDetailScreen() {
         setJoinError(msg || 'Failed to join lobby.');
         return;
       }
-      await Promise.all([loadParticipants(), loadLobby()]);
+
+      if (currentUserId) {
+        setParticipants((prev) => {
+          if (prev.some((p) => p.player_id === currentUserId)) return prev;
+          return [
+            ...prev,
+            { player_id: currentUserId, username: 'You', is_ready: false, current_team: null },
+          ];
+        });
+      }
+
+      void loadParticipants();
+      void loadLobby();
     } catch (e) {
       setJoinError(e instanceof Error ? e.message : 'Failed to join lobby.');
     } finally {
       setJoining(false);
+    }
+  };
+
+  const handleJoin = async () => {
+    if (!id || joining) return;
+    if (joinRequiresPassword) {
+      setJoinUnlockError(null);
+      setJoinPassword('');
+      setJoinPasswordModalOpen(true);
+      return;
+    }
+    await attemptJoin();
+  };
+
+  const handleUnlockWithPasswordAndJoin = async () => {
+    if (!id || joinUnlockBusy) return;
+    setJoinUnlockError(null);
+    setJoinUnlockBusy(true);
+    try {
+      const unlockRes = await authedFetch(`/lobbies/${id}/unlock`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: joinPassword }),
+      });
+      if (!unlockRes.ok) {
+        const detail = await readErrorDetail(unlockRes);
+        setJoinUnlockError(detail || 'Incorrect lobby password.');
+        return;
+      }
+      const data = (await unlockRes.json()) as { unlock_token: string };
+      setLobbyUnlockTokenSync(id, data.unlock_token);
+
+      setJoinPasswordModalOpen(false);
+      setJoinPassword('');
+
+      const joinRes = await authedFetchForLobby(id, `/lobbies/${id}/join`, {
+        method: 'POST',
+      });
+      if (!joinRes.ok) {
+        const detail = await readErrorDetail(joinRes);
+        setJoinError(detail || 'Failed to join lobby.');
+        return;
+      }
+
+      // Optimistic update so the user sees themselves immediately
+      if (currentUserId) {
+        setParticipants((prev) => {
+          if (prev.some((p) => p.player_id === currentUserId)) return prev;
+          return [
+            ...prev,
+            { player_id: currentUserId, username: 'You', is_ready: false, current_team: null },
+          ];
+        });
+      }
+
+      // Reload from server to get authoritative data (username, etc.)
+      void loadLobby();
+      void loadParticipants();
+    } catch (e) {
+      setJoinUnlockError(e instanceof Error ? e.message : 'Could not unlock lobby.');
+    } finally {
+      setJoinUnlockBusy(false);
     }
   };
 
@@ -318,6 +407,8 @@ export default function LobbyDetailScreen() {
     isHost ||
     (currentUserId != null &&
       participants.some((p) => p.player_id === currentUserId));
+  const rosterHidden = !!(lobby?.participant_details_hidden && !isHost);
+  const joinRequiresPassword = !!lobby && lobby.is_public === false && !isParticipant;
   const isLobbyFull = !!lobby && participants.length >= lobby.max_players;
   const lobbyMinElo = lobby?.min_elo ?? 0;
   const myEloForLobbySport = useMemo(() => {
@@ -344,6 +435,9 @@ export default function LobbyDetailScreen() {
     setEditMaxPlayers(String(lobby.max_players));
     setEditMinElo(String(lobby.min_elo ?? 0));
     setEditIsPublic(lobby.is_public);
+    setInitialEditWasPublic(lobby.is_public);
+    setEditPrivatePassword('');
+    setEditPrivatePasswordConfirm('');
     setEditError(null);
     setEditOpen(true);
   }, [lobby]);
@@ -439,22 +533,51 @@ export default function LobbyDetailScreen() {
       setEditError('Start time must be in the future.');
       return;
     }
+    if (!editIsPublic) {
+      if (initialEditWasPublic) {
+        const p = editPrivatePassword.trim();
+        const c = editPrivatePasswordConfirm.trim();
+        if (p.length < 4) {
+          setEditError('Private lobbies need a password of at least 4 characters.');
+          return;
+        }
+        if (p !== c) {
+          setEditError('Password and confirmation do not match.');
+          return;
+        }
+      } else if (editPrivatePassword.trim().length > 0) {
+        const p = editPrivatePassword.trim();
+        const c = editPrivatePasswordConfirm.trim();
+        if (p.length < 4 || p !== c) {
+          setEditError('New password must be at least 4 characters and match confirmation.');
+          return;
+        }
+      }
+    }
     setEditError(null);
     setSaving(true);
     try {
+      const patchBody: Record<string, unknown> = {
+        lobby_name: name,
+        sport: editSport.trim(),
+        campus: selectedLoc.campus,
+        location_id: editLocationId,
+        is_public: editIsPublic,
+        max_players: max,
+        min_elo: minElo,
+        scheduled_start_time: editScheduledAt.toISOString(),
+      };
+      if (!editIsPublic) {
+        if (initialEditWasPublic) {
+          patchBody.lobby_password = editPrivatePassword.trim();
+        } else if (editPrivatePassword.trim().length > 0) {
+          patchBody.lobby_password = editPrivatePassword.trim();
+        }
+      }
       const res = await authedFetch(`/lobbies/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          lobby_name: name,
-          sport: editSport.trim(),
-          campus: selectedLoc.campus,
-          location_id: editLocationId,
-          is_public: editIsPublic,
-          max_players: max,
-          min_elo: minElo,
-          scheduled_start_time: editScheduledAt.toISOString(),
-        }),
+        body: JSON.stringify(patchBody),
       });
       if (!res.ok) {
         const raw = await res.text().catch(() => '');
@@ -582,14 +705,15 @@ export default function LobbyDetailScreen() {
                   </Text>
                 </View>
                 <View style={styles.metaRightCol}>
-                  {lobby.participant_average_elo != null ? (
+                  {!rosterHidden && lobby.participant_average_elo != null ? (
                     <Text style={styles.metaText}>
                       Avg ELO {Math.round(lobby.participant_average_elo)}
                     </Text>
                   ) : null}
                   <Text style={styles.metaText}>
-                    {lobby.max_players} players max · {lobby.is_public ? 'Public' : 'Private'} · Min ELO{' '}
-                    {lobbyMinElo}
+                    {rosterHidden
+                      ? `${lobby.max_players} players max · Private · Roster hidden · Min ELO ${lobbyMinElo}`
+                      : `${lobby.max_players} players max · ${lobby.is_public ? 'Public' : 'Private'} · Min ELO ${lobbyMinElo}`}
                   </Text>
                 </View>
               </View>
@@ -656,7 +780,10 @@ export default function LobbyDetailScreen() {
                   style={[styles.joinButton, joining && styles.joinButtonDisabled]}
                   onPress={handleJoin}
                   disabled={
-                    joining || lobby.status !== 'open' || isLobbyFull || isBelowMinElo
+                    joining ||
+                    lobby.status !== 'open' ||
+                    isLobbyFull ||
+                    isBelowMinElo
                   }
                   activeOpacity={0.9}
                 >
@@ -664,19 +791,27 @@ export default function LobbyDetailScreen() {
                     {joining
                       ? 'Joining…'
                       : isLobbyFull
-                        ? 'Lobby full'
-                        : isBelowMinElo
-                          ? 'ELO too low'
-                          : 'Join this lobby'}
+                          ? 'Lobby full'
+                          : isBelowMinElo
+                            ? 'ELO too low'
+                          : joinRequiresPassword
+                            ? 'Join this private lobby'
+                            : 'Join this lobby'}
                   </Text>
                 </TouchableOpacity>
               )}
             </View>
 
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Participants ({participants.length})</Text>
+              <Text style={styles.sectionTitle}>
+                {rosterHidden ? 'Participants' : `Participants (${participants.length})`}
+              </Text>
               <View style={styles.participantList}>
-                {participants.length === 0 ? (
+                {rosterHidden ? (
+                  <Text style={styles.emptyParticipants}>
+                    Hidden — tap &quot;Join this private lobby&quot; and enter the password to see who is playing.
+                  </Text>
+                ) : participants.length === 0 ? (
                   <Text style={styles.emptyParticipants}>No participants yet.</Text>
                 ) : (
                   participants.map((p) => (
@@ -724,6 +859,63 @@ export default function LobbyDetailScreen() {
           </ScrollView>
         ) : null}
       </View>
+
+      <Modal
+        visible={joinPasswordModalOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => {
+          setJoinPasswordModalOpen(false);
+          setJoinUnlockError(null);
+        }}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Enter lobby password</Text>
+            {joinUnlockError ? <Text style={styles.errorText}>{joinUnlockError}</Text> : null}
+
+            <Text style={styles.label}>Password</Text>
+            <TextInput
+              style={[styles.input, styles.unlockInput]}
+              value={joinPassword}
+              onChangeText={setJoinPassword}
+              placeholder="Lobby password"
+              placeholderTextColor={MUTED_TEXT}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={!joinUnlockBusy}
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={() => {
+                  setJoinPasswordModalOpen(false);
+                  setJoinUnlockError(null);
+                }}
+                disabled={joinUnlockBusy}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.secondaryButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.primaryButton,
+                  joinUnlockBusy && styles.primaryButtonDisabled,
+                ]}
+                onPress={() => void handleUnlockWithPasswordAndJoin()}
+                disabled={joinUnlockBusy || !joinPassword.trim()}
+                activeOpacity={0.9}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {joinUnlockBusy ? 'Unlocking…' : 'Unlock & join'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={editOpen}
@@ -938,8 +1130,51 @@ export default function LobbyDetailScreen() {
 
             <View style={styles.switchRow}>
               <Text style={styles.label}>Public lobby</Text>
-              <Switch value={editIsPublic} onValueChange={setEditIsPublic} />
+              <Switch
+                value={editIsPublic}
+                onValueChange={(v) => {
+                  setEditIsPublic(v);
+                  if (v) {
+                    setEditPrivatePassword('');
+                    setEditPrivatePasswordConfirm('');
+                  }
+                }}
+              />
             </View>
+
+            {!editIsPublic ? (
+              <>
+                <Text style={styles.label}>
+                  {initialEditWasPublic ? 'Lobby password' : 'New password (optional)'}
+                </Text>
+                <Text style={styles.mutedTextSmall}>
+                  {initialEditWasPublic
+                    ? 'Required while switching from public to private.'
+                    : 'Leave blank to keep the current password. Enter a new password to change it.'}
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  value={editPrivatePassword}
+                  onChangeText={setEditPrivatePassword}
+                  placeholder="At least 4 characters"
+                  placeholderTextColor={MUTED_TEXT}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <Text style={styles.label}>Confirm password</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editPrivatePasswordConfirm}
+                  onChangeText={setEditPrivatePasswordConfirm}
+                  placeholder="Re-enter password"
+                  placeholderTextColor={MUTED_TEXT}
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </>
+            ) : null}
 
             <View style={styles.modalActions}>
               <TouchableOpacity
@@ -1267,6 +1502,11 @@ const styles = StyleSheet.create({
     borderColor: BORDER_GRAY,
     fontSize: 14,
     color: DARK_NAVY,
+  },
+  unlockInput: {
+    marginTop: 12,
+    marginBottom: 12,
+    backgroundColor: '#FFFFFF',
   },
   pillRow: {
     flexDirection: 'row',

@@ -1,7 +1,14 @@
+from __future__ import annotations
+
 from uuid import UUID
 
-from app.repositories import lobby_repository, playerstats_repository
+from app.core.lobby_unlock import (
+    create_unlock_token,
+    verify_lobby_password,
+    verify_unlock_token,
+)
 from app.models.lobby import LobbyCreate, LobbyResponse, LobbyUpdate
+from app.repositories import lobby_repository, playerstats_repository
 
 
 def _user_sport_elo(*, user_id: str, sport: str) -> int:
@@ -14,37 +21,168 @@ def _user_sport_elo(*, user_id: str, sport: str) -> int:
     return int(elo_map.get(uid, playerstats_repository.DEFAULT_STARTING_ELO))
 
 
-def get_all_lobbies() -> list[LobbyResponse]:
-    return lobby_repository.get_all_lobbies()
+def _uids_match(a, b) -> bool:
+    if a is None or b is None:
+        return False
+    try:
+        return str(UUID(str(a))) == str(UUID(str(b)))
+    except (TypeError, ValueError):
+        return str(a).strip() == str(b).strip()
 
 
-def get_my_upcoming_lobbies(user_id: str) -> list:
-    return lobby_repository.get_upcoming_lobbies_for_user(user_id)
+def _strip_secrets(row: dict) -> dict:
+    return {k: v for k, v in row.items() if k != "password_hash"}
+
+
+def _is_host(lobby: dict, user_id: str | None) -> bool:
+    if not user_id:
+        return False
+    return _uids_match(lobby.get("host_user_id"), user_id)
+
+
+def _roster_is_visible(
+    lobby: dict,
+    *,
+    lobby_id: UUID,
+    user_id: str | None,
+    unlock_token: str | None,
+    member_lobby_ids: set[str] | None = None,
+) -> bool:
+    # UX requirement: private lobbies should display the same roster info as public lobbies
+    # when someone opens the lobby. "Full access" (joining) is still protected by password.
+    return True
+
+
+def _to_lobby_response(
+    row: dict,
+    *,
+    lobby_id: UUID,
+    user_id: str | None,
+    unlock_token: str | None,
+    member_lobby_ids: set[str] | None = None,
+) -> LobbyResponse:
+    hidden = not _roster_is_visible(
+        lobby=row,
+        lobby_id=lobby_id,
+        user_id=user_id,
+        unlock_token=unlock_token,
+        member_lobby_ids=member_lobby_ids,
+    )
+    d = _strip_secrets(row)
+    if hidden:
+        d["participant_count"] = None
+        d["participant_average_elo"] = None
+    d["participant_details_hidden"] = hidden
+    return LobbyResponse.model_validate(d)
+
+
+def get_all_lobbies(*, user_id: str | None, unlock_token: str | None) -> list[LobbyResponse]:
+    rows = lobby_repository.get_all_lobbies()
+    member_ids = (
+        lobby_repository.get_lobby_ids_for_participant(user_id) if user_id else set()
+    )
+    out: list[LobbyResponse] = []
+    for row in rows:
+        lid = UUID(str(row["lobby_id"]))
+        out.append(
+            _to_lobby_response(
+                row,
+                lobby_id=lid,
+                user_id=user_id,
+                unlock_token=unlock_token,
+                member_lobby_ids=member_ids,
+            )
+        )
+    return out
+
+
+def get_my_upcoming_lobbies(user_id: str) -> list[LobbyResponse]:
+    rows = lobby_repository.get_upcoming_lobbies_for_user(user_id)
+    return [
+        LobbyResponse.model_validate(
+            {**_strip_secrets(r), "participant_details_hidden": False}
+        )
+        for r in rows
+    ]
 
 
 def get_lobby_by_id(lobby_id: UUID) -> dict | None:
     return lobby_repository.get_lobby_by_id(lobby_id)
 
 
-def create_lobby(*, user_id: str, payload: LobbyCreate):
+def get_lobby_for_viewer(
+    lobby_id: UUID, user_id: str, unlock_token: str | None
+) -> LobbyResponse | None:
+    row = lobby_repository.get_lobby_by_id(lobby_id)
+    if not row:
+        return None
+    member_ids = lobby_repository.get_lobby_ids_for_participant(user_id)
+    return _to_lobby_response(
+        row,
+        lobby_id=lobby_id,
+        user_id=user_id,
+        unlock_token=unlock_token,
+        member_lobby_ids=member_ids,
+    )
+
+
+def create_lobby(*, user_id: str, payload: LobbyCreate) -> LobbyResponse:
     host_elo = _user_sport_elo(user_id=user_id, sport=payload.sport)
     if int(payload.min_elo) > host_elo:
         raise ValueError("Minimum ELO cannot be higher than your current ELO")
-    return lobby_repository.create_lobby(host_user_id=user_id, payload=payload)
+    row = lobby_repository.create_lobby(host_user_id=user_id, payload=payload)
+    lid = UUID(str(row["lobby_id"]))
+    return _to_lobby_response(
+        row,
+        lobby_id=lid,
+        user_id=user_id,
+        unlock_token=None,
+        member_lobby_ids=lobby_repository.get_lobby_ids_for_participant(user_id),
+    )
 
 
-def update_lobby(*, lobby_id: UUID, user_id: str, payload: LobbyUpdate) -> dict | None:
+def update_lobby(*, lobby_id: UUID, user_id: str, payload: LobbyUpdate) -> LobbyResponse | None:
     lobby = lobby_repository.get_lobby_by_id(lobby_id)
     if not lobby or str(lobby.get("host_user_id")) != user_id:
         return None
     if payload.min_elo is not None:
-        # Enforce against the lobby's sport ELO. If host is changing the sport at the same
-        # time, validate against the new sport.
         sport = payload.sport if payload.sport is not None else str(lobby.get("sport") or "")
         host_elo = _user_sport_elo(user_id=user_id, sport=sport)
         if int(payload.min_elo) > host_elo:
             raise ValueError("Minimum ELO cannot be higher than your current ELO")
-    return lobby_repository.update_lobby(lobby_id=lobby_id, payload=payload)
+
+    if payload.lobby_password is not None and len(payload.lobby_password.strip()) > 0:
+        if len(payload.lobby_password.strip()) < 4:
+            raise ValueError("Lobby password must be at least 4 characters")
+
+    was_public = bool(lobby.get("is_public", True))
+    if payload.is_public is False and was_public:
+        pwd = (payload.lobby_password or "").strip()
+        if len(pwd) < 4:
+            raise ValueError(
+                "Private lobbies require a password of at least 4 characters when switching from public"
+            )
+    if payload.is_public is False and not was_public:
+        had_hash = bool(lobby.get("password_hash"))
+        if not had_hash:
+            pwd = (payload.lobby_password or "").strip()
+            if len(pwd) < 4:
+                raise ValueError(
+                    "This private lobby does not have a password set yet. "
+                    "Please set a password of at least 4 characters."
+                )
+
+    updated = lobby_repository.update_lobby(lobby_id=lobby_id, payload=payload)
+    if not updated:
+        return None
+    member_ids = lobby_repository.get_lobby_ids_for_participant(user_id)
+    return _to_lobby_response(
+        updated,
+        lobby_id=lobby_id,
+        user_id=user_id,
+        unlock_token=None,
+        member_lobby_ids=member_ids,
+    )
 
 
 def delete_lobby(*, lobby_id: UUID, user_id: str) -> bool:
@@ -62,10 +200,36 @@ def _player_id_key(player_id) -> str:
         return str(player_id).strip()
 
 
-def join_lobby(*, lobby_id: UUID, user_id: str) -> dict:
+def unlock_private_lobby(*, lobby_id: UUID, user_id: str, password: str) -> str | None:
+    lobby = lobby_repository.get_lobby_by_id(lobby_id)
+    if not lobby:
+        return None
+    if lobby.get("is_public", True):
+        return create_unlock_token(lobby_id=lobby_id, user_id=user_id)
+    ph = lobby.get("password_hash")
+    if not ph:
+        return create_unlock_token(lobby_id=lobby_id, user_id=user_id)
+    if verify_lobby_password(password.strip(), ph):
+        return create_unlock_token(lobby_id=lobby_id, user_id=user_id)
+    return None
+
+
+def join_lobby(*, lobby_id: UUID, user_id: str, unlock_token: str | None) -> dict:
     lobby = lobby_repository.get_lobby_by_id(lobby_id)
     if not lobby:
         raise RuntimeError("Lobby not found")
+
+    if not lobby.get("is_public", True) and lobby.get("password_hash"):
+        if _is_host(lobby, user_id):
+            pass
+        elif lobby_repository.is_user_in_lobby(lobby_id, user_id):
+            pass
+        else:
+            tok = (unlock_token or "").strip()
+            if not tok or not verify_unlock_token(token=tok, lobby_id=lobby_id, user_id=user_id):
+                raise RuntimeError(
+                    "Private lobby: unlock with the lobby password before joining"
+                )
 
     participants = lobby_repository.get_participants_for_lobby(lobby_id)
     user_key = _player_id_key(user_id)
@@ -92,6 +256,18 @@ def leave_lobby(*, lobby_id: UUID, user_id: str, host_user_id: str) -> dict:
     )
 
 
-def get_lobby_participants(lobby_id: UUID) -> list[dict]:
-    return lobby_repository.get_participants_for_lobby(lobby_id)
-
+def is_lobby_roster_visible(
+    lobby: dict,
+    *,
+    lobby_id: UUID,
+    user_id: str,
+    unlock_token: str | None,
+) -> bool:
+    member_ids = lobby_repository.get_lobby_ids_for_participant(user_id)
+    return _roster_is_visible(
+        lobby,
+        lobby_id=lobby_id,
+        user_id=user_id,
+        unlock_token=unlock_token,
+        member_lobby_ids=member_ids,
+    )

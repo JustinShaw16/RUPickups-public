@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { authedFetch } from '@/api/backend';
+import { authedFetch, authedFetchForLobby } from '@/api/backend';
 import { Modal } from 'react-native';
 
 type Match = {
@@ -203,9 +203,10 @@ export default function MatchPage() {
       const matchData = (await matchRes.json()) as Match;
       setMatch(matchData);
 
+      const lid = matchData.lobby_id;
       const [lobbyRes, participantsRes] = await Promise.all([
-        authedFetch(`/lobbies/${matchData.lobby_id}`),
-        authedFetch(`/lobbies/${matchData.lobby_id}/participants`),
+        authedFetchForLobby(lid, `/lobbies/${lid}`),
+        authedFetchForLobby(lid, `/lobbies/${lid}/participants`),
       ]);
 
       if (lobbyRes.ok) {

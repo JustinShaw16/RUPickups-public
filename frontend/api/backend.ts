@@ -1,4 +1,5 @@
 import { Platform } from 'react-native'
+import { getLobbyUnlockTokenSync } from '@/api/lobbyUnlock'
 import { supabase } from '@/api/supabase'
 
 const API_BASE_URL_COMMON = process.env.EXPO_PUBLIC_API_BASE_URL
@@ -37,6 +38,23 @@ export async function authedFetch(
 
   const headers = new Headers(init?.headers)
   headers.set('Authorization', `Bearer ${token}`)
+
+  return fetch(`${API_BASE_URL}${path}`, { ...init, headers })
+}
+
+/** Merge lobby unlock header for private-lobby API calls when a token exists for this lobby. */
+export async function authedFetchForLobby(
+  lobbyId: string,
+  path: string,
+  init?: RequestInit
+): Promise<Response> {
+  const token = await getAccessToken()
+  if (!token) throw new Error('Not authenticated')
+
+  const unlock = getLobbyUnlockTokenSync(lobbyId)
+  const headers = new Headers(init?.headers)
+  headers.set('Authorization', `Bearer ${token}`)
+  if (unlock) headers.set('X-Lobby-Unlock', unlock)
 
   return fetch(`${API_BASE_URL}${path}`, { ...init, headers })
 }

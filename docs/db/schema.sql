@@ -117,7 +117,9 @@ create table if not exists public.lobby (
   location_id uuid references public.locations(location_id) on delete set null,
 
   is_public boolean not null default true,
-  
+
+  password_hash text,
+
   max_players integer not null default 5 check (max_players > 1),
   min_elo integer not null default 0 check (min_elo >= 0),
   status lobby_status not null default 'open',

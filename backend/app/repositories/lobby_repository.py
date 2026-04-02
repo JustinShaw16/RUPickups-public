@@ -1,5 +1,6 @@
 from uuid import UUID
 
+from app.core.lobby_unlock import hash_lobby_password
 from app.db.supabase_client import get_supabase_client
 from app.db.supabase_admin_client import get_supabase_admin_client
 from app.models.lobby import LobbyCreate, LobbyUpdate
@@ -43,6 +44,44 @@ def _enrich_lobby_row_with_participant_average_elo(row: dict) -> None:
     row["participant_average_elo"] = round(sum(elos) / len(elos), 1)
 
 
+def _normalize_uuid(s: str) -> str:
+    """Canonical UUID string so DB comparison matches (Postgres normalizes UUIDs)."""
+    try:
+        return str(UUID(str(s).strip()))
+    except (TypeError, ValueError):
+        return str(s).strip()
+
+
+def is_user_in_lobby(lobby_id: UUID, user_id: str) -> bool:
+    db = get_supabase_client()
+    uid = _normalize_uuid(user_id)
+    for candidate in {str(user_id).strip(), uid}:
+        resp = (
+            db.table("lobby_participants")
+            .select("player_id")
+            .eq("lobby_id", str(lobby_id))
+            .eq("player_id", candidate)
+            .limit(1)
+            .execute()
+        )
+        if resp.data:
+            return True
+    return False
+
+
+def get_lobby_ids_for_participant(user_id: str) -> set[str]:
+    db = get_supabase_client()
+    uid = _normalize_uuid(user_id)
+    seen: set[str] = set()
+    for candidate in {str(user_id).strip(), uid}:
+        resp = db.table("lobby_participants").select("lobby_id").eq("player_id", candidate).execute()
+        for r in resp.data or []:
+            lid = r.get("lobby_id")
+            if lid is not None:
+                seen.add(str(lid))
+    return seen
+
+
 def get_lobby_by_id(lobby_id: UUID) -> dict | None:
     db = get_supabase_client()
     response = db.table("lobby").select("*").eq("lobby_id", str(lobby_id)).execute()
@@ -53,14 +92,6 @@ def get_lobby_by_id(lobby_id: UUID) -> dict | None:
         row["lobby_name"] = f"{row.get('sport') or 'Pickup'} lobby"
     _enrich_lobby_row_with_participant_average_elo(row)
     return row
-
-
-def _normalize_uuid(s: str) -> str:
-    """Canonical UUID string so DB comparison matches (Postgres normalizes UUIDs)."""
-    try:
-        return str(UUID(str(s).strip()))
-    except (TypeError, ValueError):
-        return str(s).strip()
 
 
 def get_upcoming_lobbies_for_user(user_id: str):
@@ -261,6 +292,8 @@ def create_lobby(*, host_user_id: str, payload: LobbyCreate) -> dict:
         "campus": payload.campus,
         "min_elo": int(payload.min_elo),
     }
+    if not payload.is_public and payload.lobby_password:
+        insert_data["password_hash"] = hash_lobby_password(payload.lobby_password)
 
     # Remove keys with None values so database defaults can apply
     insert_data = {key: value for key, value in insert_data.items() if value is not None}
@@ -304,6 +337,12 @@ def update_lobby(*, lobby_id: UUID, payload: LobbyUpdate) -> dict | None:
         update_data["max_players"] = payload.max_players
     if payload.min_elo is not None:
         update_data["min_elo"] = int(payload.min_elo)
+    if payload.is_public is True:
+        update_data["password_hash"] = None
+    elif payload.lobby_password is not None:
+        pwd = payload.lobby_password.strip()
+        if len(pwd) >= 4:
+            update_data["password_hash"] = hash_lobby_password(pwd)
     if not update_data:
         return get_lobby_by_id(lobby_id)
     response = (

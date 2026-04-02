@@ -21,7 +21,7 @@ import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
-import { API_BASE_URL, authedFetch } from '@/api/backend';
+import { API_BASE_URL, authedFetch, getAccessToken } from '@/api/backend';
 
 type Lobby = {
   lobby_id: string;
@@ -37,6 +37,7 @@ type Lobby = {
   created_at: string;
   participant_count?: number | null;
   participant_average_elo?: number | null;
+  participant_details_hidden?: boolean;
   min_elo?: number;
 };
 
@@ -97,6 +98,8 @@ export default function LobbiesScreen() {
   const [minEloInput, setMinEloInput] = useState<string>('');
   const [sportEloBySport, setSportEloBySport] = useState<Record<string, number>>({});
   const [isPublic, setIsPublic] = useState<boolean>(true);
+  const [lobbyPassword, setLobbyPassword] = useState('');
+  const [lobbyPasswordConfirm, setLobbyPasswordConfirm] = useState('');
   const [scheduledAt, setScheduledAt] = useState<Date>(() => {
     const d = new Date();
     d.setMinutes(d.getMinutes() + 30);
@@ -116,7 +119,10 @@ export default function LobbiesScreen() {
       setError(null);
 
       try {
-        const lobbiesRes = await fetch(`${API_BASE_URL}/lobbies`);
+        const token = await getAccessToken();
+        const lobbiesRes = token
+          ? await authedFetch('/lobbies')
+          : await fetch(`${API_BASE_URL}/lobbies`);
 
         if (!lobbiesRes.ok) {
           throw new Error(`Failed to load lobbies (${lobbiesRes.status})`);
@@ -201,6 +207,8 @@ export default function LobbiesScreen() {
     setMaxPlayers('10');
     setMinEloInput('');
     setIsPublic(true);
+    setLobbyPassword('');
+    setLobbyPasswordConfirm('');
     const d = new Date();
     d.setMinutes(d.getMinutes() + 30);
     setScheduledAt(d);
@@ -359,6 +367,19 @@ export default function LobbiesScreen() {
       return;
     }
 
+    if (!isPublic) {
+      const p = lobbyPassword.trim();
+      const c = lobbyPasswordConfirm.trim();
+      if (p.length < 4) {
+        setCreateError('Private lobbies need a password of at least 4 characters.');
+        return;
+      }
+      if (p !== c) {
+        setCreateError('Password and confirmation do not match.');
+        return;
+      }
+    }
+
     if (creating) return;
     setCreating(true);
 
@@ -373,6 +394,9 @@ export default function LobbiesScreen() {
         min_elo: minElo,
         scheduled_start_time: scheduledAt.toISOString(),
       };
+      if (!isPublic) {
+        body.lobby_password = lobbyPassword.trim();
+      }
 
       const res = await authedFetch('/lobbies', {
         method: 'POST',
@@ -620,14 +644,17 @@ export default function LobbiesScreen() {
 
                   <View style={styles.metaRow}>
                     <View style={styles.metaRightCol}>
-                      {lobby.participant_average_elo != null ? (
+                      {lobby.participant_details_hidden !== true &&
+                      lobby.participant_average_elo != null ? (
                         <Text style={styles.metaText}>
                           Avg ELO {Math.round(lobby.participant_average_elo)}
                         </Text>
                       ) : null}
                       <Text style={styles.metaText}>
-                        {lobby.is_public ? 'Public' : 'Private'} ·{' '}
-                        {(lobby.participant_count ?? 0)}/{lobby.max_players} players · Min ELO{' '}
+                        {lobby.is_public ? 'Public' : 'Private'}
+                        {lobby.participant_details_hidden
+                          ? ' · Roster hidden · Min ELO '
+                          : ` · ${lobby.participant_count ?? 0}/${lobby.max_players} players · Min ELO `}
                         {lobby.min_elo ?? 0}
                       </Text>
                     </View>
@@ -863,14 +890,42 @@ export default function LobbiesScreen() {
               </Text>
 
               <View style={styles.switchRow}>
-                <View>
+                <View style={{ flex: 1, paddingRight: 12 }}>
                   <Text style={styles.label}>Public lobby</Text>
                   <Text style={styles.mutedTextSmall}>
-                    Anyone can discover and join. Turn this off for invite-only games.
+                    Anyone can see the player list and join. Private lobbies still appear in the list,
+                    but players must enter the password you set to see who is in the game or join.
                   </Text>
                 </View>
                 <Switch value={isPublic} onValueChange={setIsPublic} />
               </View>
+
+              {!isPublic ? (
+                <>
+                  <Text style={styles.label}>Lobby password</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={lobbyPassword}
+                    onChangeText={setLobbyPassword}
+                    placeholder="At least 4 characters"
+                    placeholderTextColor={MUTED_TEXT}
+                    secureTextEntry
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <Text style={styles.label}>Confirm password</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={lobbyPasswordConfirm}
+                    onChangeText={setLobbyPasswordConfirm}
+                    placeholder="Re-enter password"
+                    placeholderTextColor={MUTED_TEXT}
+                    secureTextEntry
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </>
+              ) : null}
 
               <View style={styles.modalActions}>
                 <TouchableOpacity
