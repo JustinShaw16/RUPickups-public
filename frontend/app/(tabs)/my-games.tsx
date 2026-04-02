@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -121,16 +121,10 @@ export default function MyGamesScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-
   useFocusEffect(
     useCallback(() => {
-      if (isUpcoming) {
-        void load();
-      }
-    }, [isUpcoming, load])
+      void load();
+    }, [load])
   );
 
   const onRefresh = () => {
