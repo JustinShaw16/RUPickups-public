@@ -10,9 +10,9 @@ export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
-   const [emailError, setEmailError] = useState('')
-   const [passwordError, setPasswordError] = useState('')
-   const [globalError, setGlobalError] = useState('')
+  const [emailError, setEmailError] = useState('')
+  const [passwordError, setPasswordError] = useState('')
+  const [globalError, setGlobalError] = useState('')
 
   const handleLogin = async () => {
     const trimmedEmail = email.trim()
@@ -40,8 +40,6 @@ export default function Login() {
       })
 
       if (error) {
-        // Supabase intentionally returns a generic error for wrong email/password
-        // to avoid leaking which one is incorrect.
         if (error.message.toLowerCase().includes('invalid login credentials')) {
           setGlobalError('Email or password is incorrect.')
         } else {
@@ -170,7 +168,7 @@ export default function Login() {
 const styles = StyleSheet.create({
   background: {
     flex: 1,
-    backgroundColor: '#CC0033', // scarlet red
+    backgroundColor: '#CC0033',
   },
   overlay: {
     flex: 1,
@@ -194,8 +192,8 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   logo: {
-    width: '85%',
-    aspectRatio: 1,
+    width: '72%',
+    height: 110,
     alignSelf: 'center',
     marginBottom: 12,
   },
