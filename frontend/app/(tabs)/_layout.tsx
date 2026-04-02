@@ -26,7 +26,6 @@ export default function TabLayout() {
   const backdropAnim = useRef(new Animated.Value(0)).current;
   const colors = Colors[colorScheme ?? 'light'];
 
-  // Only run open animation when drawer opens; close is handled in closeDrawer so the panel actually slides off before we unmount the backdrop
   useEffect(() => {
     if (!drawerOpen) return;
     Animated.parallel([
@@ -62,9 +61,7 @@ export default function TabLayout() {
 
   return (
     <View style={styles.container}>
-      {/* When drawer is open, block touches to main content so backdrop receives them and closes drawer */}
       <View style={styles.mainContent} pointerEvents={drawerOpen ? 'none' : 'auto'}>
-        {/* Top bar: menu (left) + logo — paddingTop so menu isn't clipped by status bar on Android */}
         <View
           style={[
             styles.topBar,
@@ -87,63 +84,59 @@ export default function TabLayout() {
         </View>
 
         <View style={styles.tabsWrap}>
-        <Tabs
-          initialRouteName="lobbies"
-          screenOptions={{
-            tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-            headerShown: false,
-            tabBarButton: HapticTab,
-          }}>
-          <Tabs.Screen
-            name="index"
-            options={{
-              href: null,
-              title: 'Home',
-              tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
-            }}
-          />
-          <Tabs.Screen
-            name="lobbies"
-            options={{
-              title: 'Lobbies',
-              tabBarIcon: ({ color }) => (
-                <IconSymbol size={28} name="person.3.sequence.fill" color={color} />
-              ),
-            }}
-          />
-          <Tabs.Screen
-            name="my-games"
-            options={{
-              title: 'My Games',
-              tabBarIcon: ({ color }) => <IconSymbol size={28} name="calendar" color={color} />,
-            }}
-          />
-          <Tabs.Screen
-            name="leaderboard"
-            options={{
-              title: 'Leaderboard',
-              tabBarIcon: ({ color }) => <IconSymbol size={28} name="trophy.fill" color={color} />,
-            }}
-          />
-          <Tabs.Screen
-            name="explore"
-            options={{
-              href: null,
-              title: 'Explore',
-              tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
-            }}
-          />
-        </Tabs>
+          <Tabs
+            initialRouteName="lobbies"
+            screenOptions={{
+              tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+              headerShown: false,
+              tabBarButton: HapticTab,
+            }}>
+            <Tabs.Screen
+              name="index"
+              options={{
+                href: null,
+                title: 'Home',
+                tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+              }}
+            />
+            <Tabs.Screen
+              name="lobbies"
+              options={{
+                title: 'Lobbies',
+                tabBarIcon: ({ color }) => (
+                  <IconSymbol size={28} name="person.3.sequence.fill" color={color} />
+                ),
+              }}
+            />
+            <Tabs.Screen
+              name="my-games"
+              options={{
+                title: 'My Games',
+                tabBarIcon: ({ color }) => <IconSymbol size={28} name="calendar" color={color} />,
+              }}
+            />
+            <Tabs.Screen
+              name="leaderboard"
+              options={{
+                title: 'Leaderboard',
+                tabBarIcon: ({ color }) => <IconSymbol size={28} name="trophy.fill" color={color} />,
+              }}
+            />
+            <Tabs.Screen
+              name="explore"
+              options={{
+                href: null,
+                title: 'Explore',
+                tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+              }}
+            />
+          </Tabs>
         </View>
       </View>
 
-      {/* Backdrop only to the right of the drawer so tap there reliably closes it */}
       {drawerOpen && (
         <View style={styles.backdropWrap} pointerEvents="box-none">
-          <Pressable
-            style={styles.backdropTouchable}
-            onPress={closeDrawer}
-          >
+          <Pressable style={styles.backdropTouchable} onPress={closeDrawer}>
             <Animated.View
               pointerEvents="none"
               style={[styles.backdrop, { opacity: backdropAnim }]}
@@ -191,9 +184,11 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   logo: {
-    height: 52,
-    width: 240,
-    marginLeft: -75,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 44,
+    zIndex: 0,
   },
   tabsWrap: {
     flex: 1,
@@ -222,4 +217,3 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
 });
-
