@@ -100,6 +100,8 @@ export default function LobbiesScreen() {
   const [isPublic, setIsPublic] = useState<boolean>(true);
   const [lobbyPassword, setLobbyPassword] = useState('');
   const [lobbyPasswordConfirm, setLobbyPasswordConfirm] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
   const [scheduledAt, setScheduledAt] = useState<Date>(() => {
     const d = new Date();
     d.setMinutes(d.getMinutes() + 30);
@@ -209,6 +211,8 @@ export default function LobbiesScreen() {
     setIsPublic(true);
     setLobbyPassword('');
     setLobbyPasswordConfirm('');
+    setShowPassword(false);
+    setShowPasswordConfirm(false);
     const d = new Date();
     d.setMinutes(d.getMinutes() + 30);
     setScheduledAt(d);
@@ -903,27 +907,53 @@ export default function LobbiesScreen() {
               {!isPublic ? (
                 <>
                   <Text style={styles.label}>Lobby password</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={lobbyPassword}
-                    onChangeText={setLobbyPassword}
-                    placeholder="At least 4 characters"
-                    placeholderTextColor={MUTED_TEXT}
-                    secureTextEntry
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
+                  <View style={styles.passwordRow}>
+                    <TextInput
+                      style={[styles.input, styles.passwordInput]}
+                      value={lobbyPassword}
+                      onChangeText={setLobbyPassword}
+                      placeholder="At least 4 characters"
+                      placeholderTextColor={MUTED_TEXT}
+                      secureTextEntry={!showPassword}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                    <Pressable
+                      onPress={() => setShowPassword((v) => !v)}
+                      style={styles.eyeButton}
+                      hitSlop={8}
+                    >
+                      <MaterialIcons
+                        name={showPassword ? 'visibility' : 'visibility-off'}
+                        size={20}
+                        color={MUTED_TEXT}
+                      />
+                    </Pressable>
+                  </View>
                   <Text style={styles.label}>Confirm password</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={lobbyPasswordConfirm}
-                    onChangeText={setLobbyPasswordConfirm}
-                    placeholder="Re-enter password"
-                    placeholderTextColor={MUTED_TEXT}
-                    secureTextEntry
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
+                  <View style={styles.passwordRow}>
+                    <TextInput
+                      style={[styles.input, styles.passwordInput]}
+                      value={lobbyPasswordConfirm}
+                      onChangeText={setLobbyPasswordConfirm}
+                      placeholder="Re-enter password"
+                      placeholderTextColor={MUTED_TEXT}
+                      secureTextEntry={!showPasswordConfirm}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                    <Pressable
+                      onPress={() => setShowPasswordConfirm((v) => !v)}
+                      style={styles.eyeButton}
+                      hitSlop={8}
+                    >
+                      <MaterialIcons
+                        name={showPasswordConfirm ? 'visibility' : 'visibility-off'}
+                        size={20}
+                        color={MUTED_TEXT}
+                      />
+                    </Pressable>
+                  </View>
                 </>
               ) : null}
 
@@ -1408,6 +1438,22 @@ const styles = StyleSheet.create({
     borderColor: BORDER_GRAY,
     fontSize: 14,
     color: DARK_NAVY,
+  },
+  passwordRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: BORDER_GRAY,
+  },
+  passwordInput: {
+    flex: 1,
+    borderWidth: 0,
+  },
+  eyeButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   switchRow: {
     flexDirection: 'row',

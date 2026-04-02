@@ -115,6 +115,9 @@ export default function LobbyDetailScreen() {
   const [initialEditWasPublic, setInitialEditWasPublic] = useState(true);
   const [editPrivatePassword, setEditPrivatePassword] = useState('');
   const [editPrivatePasswordConfirm, setEditPrivatePasswordConfirm] = useState('');
+  const [showEditPassword, setShowEditPassword] = useState(false);
+  const [showEditPasswordConfirm, setShowEditPasswordConfirm] = useState(false);
+  const [showJoinPassword, setShowJoinPassword] = useState(false);
 
   const loadLobby = useCallback(async () => {
     if (!id) return;
@@ -288,6 +291,7 @@ export default function LobbyDetailScreen() {
     if (joinRequiresPassword) {
       setJoinUnlockError(null);
       setJoinPassword('');
+      setShowJoinPassword(false);
       setJoinPasswordModalOpen(true);
       return;
     }
@@ -438,6 +442,8 @@ export default function LobbyDetailScreen() {
     setInitialEditWasPublic(lobby.is_public);
     setEditPrivatePassword('');
     setEditPrivatePasswordConfirm('');
+    setShowEditPassword(false);
+    setShowEditPasswordConfirm(false);
     setEditError(null);
     setEditOpen(true);
   }, [lobby]);
@@ -875,17 +881,30 @@ export default function LobbyDetailScreen() {
             {joinUnlockError ? <Text style={styles.errorText}>{joinUnlockError}</Text> : null}
 
             <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={[styles.input, styles.unlockInput]}
-              value={joinPassword}
-              onChangeText={setJoinPassword}
-              placeholder="Lobby password"
-              placeholderTextColor={MUTED_TEXT}
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!joinUnlockBusy}
-            />
+            <View style={[styles.passwordRow, styles.unlockInput]}>
+              <TextInput
+                style={[styles.input, styles.passwordInput]}
+                value={joinPassword}
+                onChangeText={setJoinPassword}
+                placeholder="Lobby password"
+                placeholderTextColor={MUTED_TEXT}
+                secureTextEntry={!showJoinPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!joinUnlockBusy}
+              />
+              <Pressable
+                onPress={() => setShowJoinPassword((v) => !v)}
+                style={styles.eyeButton}
+                hitSlop={8}
+              >
+                <MaterialIcons
+                  name={showJoinPassword ? 'visibility' : 'visibility-off'}
+                  size={20}
+                  color={MUTED_TEXT}
+                />
+              </Pressable>
+            </View>
 
             <View style={styles.modalActions}>
               <TouchableOpacity
@@ -1152,27 +1171,53 @@ export default function LobbyDetailScreen() {
                     ? 'Required while switching from public to private.'
                     : 'Leave blank to keep the current password. Enter a new password to change it.'}
                 </Text>
-                <TextInput
-                  style={styles.input}
-                  value={editPrivatePassword}
-                  onChangeText={setEditPrivatePassword}
-                  placeholder="At least 4 characters"
-                  placeholderTextColor={MUTED_TEXT}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
+                <View style={styles.passwordRow}>
+                  <TextInput
+                    style={[styles.input, styles.passwordInput]}
+                    value={editPrivatePassword}
+                    onChangeText={setEditPrivatePassword}
+                    placeholder="At least 4 characters"
+                    placeholderTextColor={MUTED_TEXT}
+                    secureTextEntry={!showEditPassword}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <Pressable
+                    onPress={() => setShowEditPassword((v) => !v)}
+                    style={styles.eyeButton}
+                    hitSlop={8}
+                  >
+                    <MaterialIcons
+                      name={showEditPassword ? 'visibility' : 'visibility-off'}
+                      size={20}
+                      color={MUTED_TEXT}
+                    />
+                  </Pressable>
+                </View>
                 <Text style={styles.label}>Confirm password</Text>
-                <TextInput
-                  style={styles.input}
-                  value={editPrivatePasswordConfirm}
-                  onChangeText={setEditPrivatePasswordConfirm}
-                  placeholder="Re-enter password"
-                  placeholderTextColor={MUTED_TEXT}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
+                <View style={styles.passwordRow}>
+                  <TextInput
+                    style={[styles.input, styles.passwordInput]}
+                    value={editPrivatePasswordConfirm}
+                    onChangeText={setEditPrivatePasswordConfirm}
+                    placeholder="Re-enter password"
+                    placeholderTextColor={MUTED_TEXT}
+                    secureTextEntry={!showEditPasswordConfirm}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <Pressable
+                    onPress={() => setShowEditPasswordConfirm((v) => !v)}
+                    style={styles.eyeButton}
+                    hitSlop={8}
+                  >
+                    <MaterialIcons
+                      name={showEditPasswordConfirm ? 'visibility' : 'visibility-off'}
+                      size={20}
+                      color={MUTED_TEXT}
+                    />
+                  </Pressable>
+                </View>
               </>
             ) : null}
 
@@ -1507,6 +1552,22 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 12,
     backgroundColor: '#FFFFFF',
+  },
+  passwordRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: LIGHT_GRAY,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: BORDER_GRAY,
+  },
+  passwordInput: {
+    flex: 1,
+    borderWidth: 0,
+  },
+  eyeButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   pillRow: {
     flexDirection: 'row',
