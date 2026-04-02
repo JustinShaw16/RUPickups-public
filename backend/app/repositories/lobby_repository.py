@@ -301,9 +301,17 @@ def leave_lobby(*, lobby_id: UUID, player_id: str, host_user_id: str) -> dict:
         delete_lobby(lobby_id=lobby_id)
         return {"result": "lobby_deleted", "new_host_user_id": None}
 
-    db.table("lobby").update({"host_user_id": next_host_id}).eq(
-        "lobby_id", str(lobby_id)
-    ).execute()
+    update_resp = (
+        db.table("lobby")
+        .update({"host_user_id": next_host_id})
+        .eq("lobby_id", str(lobby_id))
+        .execute()
+    )
+    updated_rows = update_resp.data or []
+    if not updated_rows:
+        raise RuntimeError(
+            f"Failed to transfer host for lobby {lobby_id}: no rows were updated"
+        )
     return {"result": "host_transferred", "new_host_user_id": next_host_id}
 
 
