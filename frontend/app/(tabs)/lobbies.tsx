@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -95,7 +95,6 @@ export default function LobbiesScreen() {
   const [locationId, setLocationId] = useState<string | null>(null);
   const [maxPlayers, setMaxPlayers] = useState<string>('10');
   const [minEloInput, setMinEloInput] = useState<string>('');
-  /** Per-sport ELO from `player_stats` (same as backend lobby min_elo cap). */
   const [sportEloBySport, setSportEloBySport] = useState<Record<string, number>>({});
   const [isPublic, setIsPublic] = useState<boolean>(true);
   const [scheduledAt, setScheduledAt] = useState<Date>(() => {
@@ -111,21 +110,20 @@ export default function LobbiesScreen() {
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('any');
   const [openFilter, setOpenFilter] = useState<'sport' | 'campus' | 'time' | null>(null);
 
-  const loadLobbies = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const lobbiesRes = await fetch(`${API_BASE_URL}/lobbies`);
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      setError(null);
 
-<<<<<<< HEAD
-      if (!lobbiesRes.ok) {
-        throw new Error(`Failed to load lobbies (${lobbiesRes.status})`);
-=======
+      try {
+        const lobbiesRes = await fetch(`${API_BASE_URL}/lobbies`);
+
         if (!lobbiesRes.ok) {
           throw new Error(`Failed to load lobbies (${lobbiesRes.status})`);
         }
 
         const lobbiesData: Lobby[] = await lobbiesRes.json();
+
         setLobbies(
           lobbiesData.sort(
             (a, b) =>
@@ -137,7 +135,10 @@ export default function LobbiesScreen() {
         // Load locations and current user in the background so lobbies appear faster
         void (async () => {
           try {
-            const locationsRes = await fetch(`${API_BASE_URL}/locations/location_manifest`);
+            const locationsRes = await fetch(
+              `${API_BASE_URL}/locations/location_manifest`,
+            );
+
             if (locationsRes.ok) {
               const locationsData: Location[] = await locationsRes.json();
               setLocations(locationsData);
@@ -153,19 +154,26 @@ export default function LobbiesScreen() {
               authedFetch('/users/me'),
               authedFetch('/users/me/sport-stats'),
             ]);
+
             if (meRes.ok) {
               const me = (await meRes.json()) as { user_id: string };
               setCurrentUserId(me.user_id);
             }
+
             if (sportStatsRes.ok) {
               const rows = (await sportStatsRes.json()) as {
                 sport: string;
                 elo: number;
               }[];
+
               const map: Record<string, number> = {};
+
               for (const r of rows) {
-                if (r.sport && typeof r.elo === 'number') map[r.sport] = r.elo;
+                if (r.sport && typeof r.elo === 'number') {
+                  map[r.sport] = r.elo;
+                }
               }
+
               setSportEloBySport(map);
             }
           } catch {
@@ -180,58 +188,11 @@ export default function LobbiesScreen() {
         }
       } finally {
         setLoading(false);
->>>>>>> bdff8c9 (min ELO filter)
       }
+    };
 
-      const lobbiesData: Lobby[] = await lobbiesRes.json();
-      setLobbies(
-        lobbiesData.sort(
-          (a, b) =>
-            new Date(a.scheduled_start_time).getTime() -
-            new Date(b.scheduled_start_time).getTime(),
-        ),
-      );
-
-      // Load locations and current user in the background so lobbies appear faster
-      void (async () => {
-        try {
-          const locationsRes = await fetch(`${API_BASE_URL}/locations/location_manifest`);
-          if (locationsRes.ok) {
-            const locationsData: Location[] = await locationsRes.json();
-            setLocations(locationsData);
-          }
-        } catch {
-          // ignore location errors for the main lobbies list
-        }
-      })();
-
-      void (async () => {
-        try {
-          const meRes = await authedFetch('/users/me');
-          if (meRes.ok) {
-            const me = (await meRes.json()) as { user_id: string };
-            setCurrentUserId(me.user_id);
-          }
-        } catch {
-          // ignore user loading errors; lobbies list still works
-        }
-      })();
-    } catch (e) {
-      if (e instanceof Error) {
-        setError(e.message);
-      } else {
-        setError('Failed to load lobbies.');
-      }
-    } finally {
-      setLoading(false);
-    }
+    void load();
   }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      void loadLobbies();
-    }, [loadLobbies])
-  );
 
   const resetCreateState = () => {
     setLobbyName('');
@@ -287,7 +248,6 @@ export default function LobbiesScreen() {
       return;
     }
 
-    // iOS: single datetime picker
     if (date && !Number.isNaN(date.getTime())) {
       setScheduledAt(date);
     }
@@ -474,9 +434,7 @@ export default function LobbiesScreen() {
             <Text style={styles.filterLabel}>Filters</Text>
             <TouchableOpacity
               style={styles.addFilterButton}
-              onPress={() =>
-                setOpenFilter((prev) => (prev ? null : 'sport'))
-              }
+              onPress={() => setOpenFilter((prev) => (prev ? null : 'sport'))}
               activeOpacity={0.85}
             >
               <Text style={styles.addFilterText}>+ Add filter</Text>
@@ -689,249 +647,252 @@ export default function LobbiesScreen() {
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Create a lobby</Text>
-            <Text style={styles.modalSubtitle}>
-              Fill in the details below — your lobby will be visible to other players right away.
-            </Text>
-
-            {createError ? <Text style={styles.errorText}>{createError}</Text> : null}
-
-            <Text style={styles.label}>Lobby name</Text>
-            <TextInput
-              style={styles.input}
-              value={lobbyName}
-              onChangeText={setLobbyName}
-              placeholder="e.g. Friday Night Hoops"
-              placeholderTextColor={MUTED_TEXT}
-            />
-
-            <Text style={styles.label}>Sport</Text>
-            <View style={styles.pillRow}>
-              {SPORT_OPTIONS.map((option) => {
-                const selected = sport === option;
-                return (
-                  <TouchableOpacity
-                    key={option}
-                    style={[styles.pill, selected && styles.pillSelected]}
-                    onPress={() => setSport(option)}
-                    activeOpacity={0.9}
-                  >
-                    <Text
-                      style={[styles.pillText, selected && styles.pillTextSelected]}
-                    >
-                      {option}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <Text style={styles.label}>Location</Text>
-            <TouchableOpacity
-              style={styles.locationSelectButton}
-              onPress={() => setLocationPickerOpen(true)}
-              activeOpacity={0.9}
+            <ScrollView
+              contentContainerStyle={styles.modalScrollContent}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
             >
-              {selectedLocation ? (
-                <View style={styles.locationSelectContent}>
-                  <Text style={[styles.locationSelectCampus, { color: getCampusColor(selectedLocation.campus) }]}>
-                    {selectedLocation.campus}
-                  </Text>
-                  <Text style={styles.locationSelectName}>{selectedLocation.name}</Text>
-                  <Text style={styles.locationSelectAddress}>{selectedLocation.address}</Text>
-                </View>
-              ) : (
-                <Text style={styles.locationSelectPlaceholder}>Select location…</Text>
-              )}
-            </TouchableOpacity>
-            {locations.length === 0 ? (
-              <Text style={styles.mutedTextSmall}>
-                No locations available. Please add locations in the database.
+              <Text style={styles.modalTitle}>Create a lobby</Text>
+              <Text style={styles.modalSubtitle}>
+                Fill in the details below — your lobby will be visible to other players right away.
               </Text>
-            ) : null}
 
-            {/* Location picker modal (dropdown scroll wheel) */}
-            <Modal
-              visible={locationPickerOpen}
-              transparent
-              animationType="slide"
-              onRequestClose={() => setLocationPickerOpen(false)}
-            >
-              <View style={styles.locationPickerBackdrop}>
-                <Pressable style={StyleSheet.absoluteFill} onPress={() => setLocationPickerOpen(false)} />
-                <View style={styles.locationPickerCard}>
-                  <Text style={styles.locationPickerTitle}>Select location</Text>
-                  <ScrollView
-                    style={styles.locationPickerScroll}
-                    contentContainerStyle={styles.locationPickerScrollContent}
-                    keyboardShouldPersistTaps="handled"
-                  >
-                    {locations.map((loc) => {
-                      const selected = locationId === loc.location_id;
-                      return (
-                        <TouchableOpacity
-                          key={loc.location_id}
-                          style={[styles.locationPickerRow, selected && styles.locationPickerRowSelected]}
-                          onPress={() => {
-                            setLocationId(loc.location_id);
-                            setLocationPickerOpen(false);
-                          }}
-                          activeOpacity={0.9}
-                        >
-                          <Text style={[styles.locationPickerCampus, { color: getCampusColor(loc.campus) }]}>
-                            {loc.campus}
-                          </Text>
-                          <Text style={styles.locationPickerName}>{loc.name}</Text>
-                          <Text style={styles.locationPickerAddress}>{loc.address}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
-                  <TouchableOpacity
-                    style={styles.locationPickerDone}
-                    onPress={() => setLocationPickerOpen(false)}
-                    activeOpacity={0.9}
-                  >
-                    <Text style={styles.locationPickerDoneText}>Done</Text>
-                  </TouchableOpacity>
-                </View>
+              {createError ? <Text style={styles.errorText}>{createError}</Text> : null}
+
+              <Text style={styles.label}>Lobby name</Text>
+              <TextInput
+                style={styles.input}
+                value={lobbyName}
+                onChangeText={setLobbyName}
+                placeholder="e.g. Friday Night Hoops"
+                placeholderTextColor={MUTED_TEXT}
+              />
+
+              <Text style={styles.label}>Sport</Text>
+              <View style={styles.pillRow}>
+                {SPORT_OPTIONS.map((option) => {
+                  const selected = sport === option;
+                  return (
+                    <TouchableOpacity
+                      key={option}
+                      style={[styles.pill, selected && styles.pillSelected]}
+                      onPress={() => setSport(option)}
+                      activeOpacity={0.9}
+                    >
+                      <Text style={[styles.pillText, selected && styles.pillTextSelected]}>
+                        {option}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
-            </Modal>
 
-            <Text style={styles.label}>Start time</Text>
-            {Platform.OS === 'web' ? (
-              <View style={styles.dateButton}>
-                <input
-                  type="datetime-local"
-                  style={{
-                    width: '100%',
-                    border: 'none',
-                    backgroundColor: 'transparent',
-                    fontSize: 14,
-                    color: DARK_NAVY,
-                    outline: 'none',
-                  }}
-                  value={(() => {
-                    const pad = (n: number) => n.toString().padStart(2, '0');
-                    const y = scheduledAt.getFullYear();
-                    const m = pad(scheduledAt.getMonth() + 1);
-                    const d = pad(scheduledAt.getDate());
-                    const h = pad(scheduledAt.getHours());
-                    const min = pad(scheduledAt.getMinutes());
-                    return `${y}-${m}-${d}T${h}:${min}`;
-                  })()}
-                  onChange={(e: any) => {
-                    const v = e.target?.value as string | undefined;
-                    if (!v) return;
-                    const next = new Date(v);
-                    if (!Number.isNaN(next.getTime())) {
-                      setScheduledAt(next);
-                    }
-                  }}
-                  min={(() => {
-                    const now = new Date();
-                    const pad = (n: number) => n.toString().padStart(2, '0');
-                    const y = now.getFullYear();
-                    const m = pad(now.getMonth() + 1);
-                    const d = pad(now.getDate());
-                    const h = pad(now.getHours());
-                    const min = pad(now.getMinutes());
-                    return `${y}-${m}-${d}T${h}:${min}`;
-                  })()}
-                />
-              </View>
-            ) : (
-              <>
-                <TouchableOpacity
-                  style={styles.dateButton}
-                  onPress={openDatePicker}
-                  activeOpacity={0.9}
-                >
-                  <Text style={styles.dateButtonText}>{formattedDate}</Text>
-                </TouchableOpacity>
-                {showPicker && Platform.OS === 'ios' && (
-                  <DateTimePicker
-                    value={scheduledAt}
-                    mode="datetime"
-                    minimumDate={new Date()}
-                    onChange={handleDateChange}
-                    display="spinner"
-                  />
-                )}
-                {showPicker && Platform.OS === 'android' && androidPickerStep === 'date' && (
-                  <DateTimePicker
-                    value={scheduledAt}
-                    mode="date"
-                    minimumDate={new Date()}
-                    onChange={handleDateChange}
-                    display="default"
-                  />
-                )}
-                {showPicker && Platform.OS === 'android' && androidPickerStep === 'time' && (
-                  <DateTimePicker
-                    value={scheduledAt}
-                    mode="time"
-                    onChange={handleDateChange}
-                    display="default"
-                  />
-                )}
-              </>
-            )}
-
-            <Text style={styles.label}>Max players</Text>
-            <TextInput
-              style={styles.input}
-              keyboardType="number-pad"
-              value={maxPlayers}
-              onChangeText={setMaxPlayers}
-            />
-
-            <Text style={styles.label}>Minimum ELO</Text>
-            <TextInput
-              style={styles.input}
-              keyboardType="number-pad"
-              value={minEloInput}
-              onChangeText={setMinEloInput}
-              placeholder="0 (default)"
-              placeholderTextColor={MUTED_TEXT}
-            />
-            <Text style={styles.mutedTextSmall}>
-              Only players at or above this ELO can join. Leave blank for 0.
-              {sport.trim()
-                ? ` Cannot exceed your ${sport.trim()} ELO (${myEloForSelectedSport ?? 400}).`
-                : ' Select a sport to see your ELO cap for this lobby.'}
-            </Text>
-
-            <View style={styles.switchRow}>
-              <View>
-                <Text style={styles.label}>Public lobby</Text>
-                <Text style={styles.mutedTextSmall}>
-                  Anyone can discover and join. Turn this off for invite-only games.
-                </Text>
-              </View>
-              <Switch value={isPublic} onValueChange={setIsPublic} />
-            </View>
-
-            <View style={styles.modalActions}>
+              <Text style={styles.label}>Location</Text>
               <TouchableOpacity
-                style={styles.secondaryButton}
-                onPress={closeCreate}
-                disabled={creating}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.primaryButton, creating && styles.primaryButtonDisabled]}
-                onPress={handleCreateLobby}
-                disabled={creating}
+                style={styles.locationSelectButton}
+                onPress={() => setLocationPickerOpen(true)}
                 activeOpacity={0.9}
               >
-                <Text style={styles.primaryButtonText}>
-                  {creating ? 'Creating…' : 'Create lobby'}
-                </Text>
+                {selectedLocation ? (
+                  <View style={styles.locationSelectContent}>
+                    <Text style={[styles.locationSelectCampus, { color: getCampusColor(selectedLocation.campus) }]}>
+                      {selectedLocation.campus}
+                    </Text>
+                    <Text style={styles.locationSelectName}>{selectedLocation.name}</Text>
+                    <Text style={styles.locationSelectAddress}>{selectedLocation.address}</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.locationSelectPlaceholder}>Select location…</Text>
+                )}
               </TouchableOpacity>
-            </View>
+              {locations.length === 0 ? (
+                <Text style={styles.mutedTextSmall}>
+                  No locations available. Please add locations in the database.
+                </Text>
+              ) : null}
+
+              <Modal
+                visible={locationPickerOpen}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setLocationPickerOpen(false)}
+              >
+                <View style={styles.locationPickerBackdrop}>
+                  <Pressable style={StyleSheet.absoluteFill} onPress={() => setLocationPickerOpen(false)} />
+                  <View style={styles.locationPickerCard}>
+                    <Text style={styles.locationPickerTitle}>Select location</Text>
+                    <ScrollView
+                      style={styles.locationPickerScroll}
+                      contentContainerStyle={styles.locationPickerScrollContent}
+                      keyboardShouldPersistTaps="handled"
+                    >
+                      {locations.map((loc) => {
+                        const selected = locationId === loc.location_id;
+                        return (
+                          <TouchableOpacity
+                            key={loc.location_id}
+                            style={[styles.locationPickerRow, selected && styles.locationPickerRowSelected]}
+                            onPress={() => {
+                              setLocationId(loc.location_id);
+                              setLocationPickerOpen(false);
+                            }}
+                            activeOpacity={0.9}
+                          >
+                            <Text style={[styles.locationPickerCampus, { color: getCampusColor(loc.campus) }]}>
+                              {loc.campus}
+                            </Text>
+                            <Text style={styles.locationPickerName}>{loc.name}</Text>
+                            <Text style={styles.locationPickerAddress}>{loc.address}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                    <TouchableOpacity
+                      style={styles.locationPickerDone}
+                      onPress={() => setLocationPickerOpen(false)}
+                      activeOpacity={0.9}
+                    >
+                      <Text style={styles.locationPickerDoneText}>Done</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </Modal>
+
+              <Text style={styles.label}>Start time</Text>
+              {Platform.OS === 'web' ? (
+                <View style={styles.dateButton}>
+                  <input
+                    type="datetime-local"
+                    style={{
+                      width: '100%',
+                      border: 'none',
+                      backgroundColor: 'transparent',
+                      fontSize: 14,
+                      color: DARK_NAVY,
+                      outline: 'none',
+                    }}
+                    value={(() => {
+                      const pad = (n: number) => n.toString().padStart(2, '0');
+                      const y = scheduledAt.getFullYear();
+                      const m = pad(scheduledAt.getMonth() + 1);
+                      const d = pad(scheduledAt.getDate());
+                      const h = pad(scheduledAt.getHours());
+                      const min = pad(scheduledAt.getMinutes());
+                      return `${y}-${m}-${d}T${h}:${min}`;
+                    })()}
+                    onChange={(e: any) => {
+                      const v = e.target?.value as string | undefined;
+                      if (!v) return;
+                      const next = new Date(v);
+                      if (!Number.isNaN(next.getTime())) {
+                        setScheduledAt(next);
+                      }
+                    }}
+                    min={(() => {
+                      const now = new Date();
+                      const pad = (n: number) => n.toString().padStart(2, '0');
+                      const y = now.getFullYear();
+                      const m = pad(now.getMonth() + 1);
+                      const d = pad(now.getDate());
+                      const h = pad(now.getHours());
+                      const min = pad(now.getMinutes());
+                      return `${y}-${m}-${d}T${h}:${min}`;
+                    })()}
+                  />
+                </View>
+              ) : (
+                <>
+                  <TouchableOpacity
+                    style={styles.dateButton}
+                    onPress={openDatePicker}
+                    activeOpacity={0.9}
+                  >
+                    <Text style={styles.dateButtonText}>{formattedDate}</Text>
+                  </TouchableOpacity>
+                  {showPicker && Platform.OS === 'ios' && (
+                    <DateTimePicker
+                      value={scheduledAt}
+                      mode="datetime"
+                      minimumDate={new Date()}
+                      onChange={handleDateChange}
+                      display="spinner"
+                    />
+                  )}
+                  {showPicker && Platform.OS === 'android' && androidPickerStep === 'date' && (
+                    <DateTimePicker
+                      value={scheduledAt}
+                      mode="date"
+                      minimumDate={new Date()}
+                      onChange={handleDateChange}
+                      display="default"
+                    />
+                  )}
+                  {showPicker && Platform.OS === 'android' && androidPickerStep === 'time' && (
+                    <DateTimePicker
+                      value={scheduledAt}
+                      mode="time"
+                      onChange={handleDateChange}
+                      display="default"
+                    />
+                  )}
+                </>
+              )}
+
+              <Text style={styles.label}>Max players</Text>
+              <TextInput
+                style={styles.input}
+                keyboardType="number-pad"
+                value={maxPlayers}
+                onChangeText={setMaxPlayers}
+              />
+
+              <Text style={styles.label}>Minimum ELO</Text>
+              <TextInput
+                style={styles.input}
+                keyboardType="number-pad"
+                value={minEloInput}
+                onChangeText={setMinEloInput}
+                placeholder="0 (default)"
+                placeholderTextColor={MUTED_TEXT}
+              />
+              <Text style={styles.mutedTextSmall}>
+                Only players at or above this ELO can join. Leave blank for 0.
+                {sport.trim()
+                  ? ` Cannot exceed your ${sport.trim()} ELO (${myEloForSelectedSport ?? 400}).`
+                  : ' Select a sport to see your ELO cap for this lobby.'}
+              </Text>
+
+              <View style={styles.switchRow}>
+                <View>
+                  <Text style={styles.label}>Public lobby</Text>
+                  <Text style={styles.mutedTextSmall}>
+                    Anyone can discover and join. Turn this off for invite-only games.
+                  </Text>
+                </View>
+                <Switch value={isPublic} onValueChange={setIsPublic} />
+              </View>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={styles.secondaryButton}
+                  onPress={closeCreate}
+                  disabled={creating}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.secondaryButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.primaryButton, creating && styles.primaryButtonDisabled]}
+                  onPress={handleCreateLobby}
+                  disabled={creating}
+                  activeOpacity={0.9}
+                >
+                  <Text style={styles.primaryButtonText}>
+                    {creating ? 'Creating…' : 'Create lobby'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -1219,6 +1180,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15, 23, 42, 0.45)',
     justifyContent: 'flex-end',
   },
+  modalScrollContent: {
+    paddingBottom: 8,
+  },
   modalCard: {
     maxHeight: '90%',
     backgroundColor: '#FFFFFF',
@@ -1430,4 +1394,3 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
-
