@@ -92,4 +92,8 @@ def create_balanced_teams(match_players: list[str], match_sport: str):
             team_b.append(player)
             sum_b += player[1]
 
+    print("PLAYERS INPUT:", match_players)
+    print("RPC RESULT:", list_of_player_ids_and_elos)
+
+
     return team_a, team_b

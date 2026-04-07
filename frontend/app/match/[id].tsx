@@ -243,6 +243,41 @@ export default function MatchPage() {
       return () => clearInterval(interval);
   }, [matchRunning, startedAtMs]);
 
+  const handleRandomizeTeams = async () => {
+    if (!lobby || players.length === 0) return;
+
+    try {
+      const params = new URLSearchParams();
+      players.forEach((p) => params.append("match_players", p.player_id));
+      params.append("match_sport", lobby.sport);
+
+      const res = await authedFetch(`/matches/matchmaking?${params.toString()}`)
+
+      if (!res.ok) {
+        throw new Error("Failed to randomize teams");
+      }
+
+      const data = await res.json();
+
+      // data.team_a = [[id, elo], [id, elo]]
+      // data.team_b = same
+
+      const teamAIds = data.team_a.map((p: any) => p[0]);
+      const teamBIds = data.team_b.map((p: any) => p[0]);
+
+      setTeamSlots({
+        teamA: resizeSlots(teamAIds, teamASlots),
+        teamB: resizeSlots(teamBIds, teamBSlots),
+      });
+
+      console.log("MATCHMAKING RESPONSE:", data);
+
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Failed to randomize teams.";
+      Alert.alert("Randomize Teams", message);
+    }
+  };
+
   const onStartMatch = async () => {
       if (submitting || matchRunning || !match?.match_id) return;
       setSubmitting(true);
@@ -456,6 +491,15 @@ export default function MatchPage() {
             </View>
 
             <View style={styles.section}>
+              <Pressable
+                onPress={() => void handleRandomizeTeams()}
+                style={({ pressed }) => [
+                  styles.randomizeButton,
+                  pressed && { opacity: 0.85 },
+                ]}
+              >
+                <Text style={styles.randomizeButtonText}>Randomize Teams</Text>
+              </Pressable>
               <Text style={styles.sectionTitle}>Teams</Text>
 
               <View style={styles.card}>
@@ -792,5 +836,18 @@ const styles = StyleSheet.create({
     color: MUTED_TEXT,
     fontSize: 14,
     fontWeight: '600',
+  },
+  randomizeButton: {
+    backgroundColor: '#2563EB',
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+
+  randomizeButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });
