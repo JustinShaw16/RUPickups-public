@@ -2,6 +2,8 @@ from uuid import UUID
 
 from app.db.supabase_client import get_supabase_client
 
+from app.repositories.matches_repository import player_ids_and_elos
+
 
 def get_matches() -> list[dict]:
     db = get_supabase_client()
@@ -66,3 +68,28 @@ def create_match(lobby_id: UUID) -> dict:
         raise RuntimeError("Failed to create match.")
 
     return created_rows[0]
+
+def create_balanced_teams(match_players: list[str], match_sport: str):
+    list_of_player_ids_and_elos = player_ids_and_elos(match_players=match_players, match_sport=match_sport)
+
+    sorted_greatest_to_least_elos = sorted(
+        list_of_player_ids_and_elos,
+        key=lambda x: x[1],
+        reverse=True
+    )
+
+    team_a = []
+    team_b = []
+
+    sum_a = 0
+    sum_b = 0
+
+    for player in sorted_greatest_to_least_elos:
+        if sum_a <= sum_b:
+            team_a.append(player)
+            sum_a += player[1]
+        else:
+            team_b.append(player)
+            sum_b += player[1]
+
+    return team_a, team_b

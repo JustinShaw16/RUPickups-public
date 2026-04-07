@@ -1,9 +1,9 @@
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from app.models.matches import MatchCreateRequest, MatchResponse
-from app.services.matches_service import create_match, get_match_by_id, get_matches
+from app.services.matches_service import create_match, get_match_by_id, get_matches, create_balanced_teams
 
 router = APIRouter()
 
@@ -12,6 +12,18 @@ router = APIRouter()
 def get_list_of_matches():
     return get_matches()
 
+
+@router.get("/matchmaking")
+def get_balanced_teams(
+    match_players: list[str] = Query(...),
+    match_sport: str = Query(...)
+):
+    team_a, team_b = create_balanced_teams(match_players=match_players, match_sport=match_sport)
+
+    return {
+        "team_a": team_a,
+        "team_b": team_b
+    }
 
 @router.get("/{match_id}", response_model=MatchResponse)
 def get_match(match_id: UUID):
