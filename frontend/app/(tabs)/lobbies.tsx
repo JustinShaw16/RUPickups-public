@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Modal,
   Platform,
   Pressable,
@@ -78,6 +79,33 @@ const SPORT_OPTIONS = [
   'Soccer',
 ] as const;
 type TimeFilter = 'any' | 'upcoming' | 'past';
+const LOBBIES_PAGE_SIZE = 8;
+
+const CAMPUS_IMAGES = {
+  collegeave: require('../photos/CollegeAve.jpg'),
+  cookdouglass: require('../photos/Cook:Douglass.jpg'),
+  livingston: require('../photos/Livingston.jpg'),
+  busch: require('../photos/Busch.jpg'),
+} as const;
+
+function getCampusThumbnail(campus: string | undefined | null) {
+  const key = normalizeCampus(campus ?? '');
+  if (key === 'collegeave') return CAMPUS_IMAGES.collegeave;
+  if (key === 'cookdouglass') return CAMPUS_IMAGES.cookdouglass;
+  if (key === 'livingston') return CAMPUS_IMAGES.livingston;
+  if (key === 'busch') return CAMPUS_IMAGES.busch;
+  return CAMPUS_IMAGES.busch;
+}
+
+function sportIconFor(sport: string): keyof typeof MaterialIcons.glyphMap {
+  const s = sport.trim().toLowerCase();
+  if (s === 'basketball') return 'sports-basketball';
+  if (s === 'soccer') return 'sports-soccer';
+  if (s === 'tennis') return 'sports-tennis';
+  if (s === 'volleyball') return 'sports-volleyball';
+  if (s === 'pickleball' || s === 'badminton') return 'sports-tennis';
+  return 'sports';
+}
 
 export default function LobbiesScreen() {
   const router = useRouter();
@@ -114,6 +142,7 @@ export default function LobbiesScreen() {
   const [campusFilter, setCampusFilter] = useState<string | 'ALL'>('ALL');
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('any');
   const [openFilter, setOpenFilter] = useState<'sport' | 'campus' | 'time' | null>(null);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     const load = async () => {
@@ -314,6 +343,20 @@ export default function LobbiesScreen() {
     });
   }, [lobbies, locations, sportFilter, campusFilter, timeFilter]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredLobbies.length / LOBBIES_PAGE_SIZE));
+  const paginatedLobbies = useMemo(() => {
+    const start = (page - 1) * LOBBIES_PAGE_SIZE;
+    return filteredLobbies.slice(start, start + LOBBIES_PAGE_SIZE);
+  }, [filteredLobbies, page]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [sportFilter, campusFilter, timeFilter]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
   const myEloForSelectedSport = useMemo(() => {
     const s = sport.trim();
     if (!s) return null;
@@ -451,9 +494,12 @@ export default function LobbiesScreen() {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         <View style={styles.headerRow}>
-          <Text style={styles.heading}>Open lobbies</Text>
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.heading}>Browse Pickup Games</Text>
+            <Text style={styles.subheading}>Find a court, time, and crew.</Text>
+          </View>
           <TouchableOpacity style={styles.createButton} onPress={openCreate} activeOpacity={0.9}>
-            <Text style={styles.createButtonText}>Create lobby</Text>
+            <Text style={styles.createButtonText}>+ New</Text>
           </TouchableOpacity>
         </View>
 
@@ -462,110 +508,193 @@ export default function LobbiesScreen() {
             <Text style={styles.filterLabel}>Filters</Text>
             <TouchableOpacity
               style={styles.addFilterButton}
-              onPress={() => setOpenFilter((prev) => (prev ? null : 'sport'))}
+              onPress={() => {
+                setSportFilter('ALL');
+                setCampusFilter('ALL');
+                setTimeFilter('any');
+                setOpenFilter(null);
+              }}
               activeOpacity={0.85}
             >
-              <Text style={styles.addFilterText}>+ Add filter</Text>
+              <Text style={styles.addFilterText}>Reset</Text>
             </TouchableOpacity>
           </View>
 
-          {(sportFilter !== 'ALL' || campusFilter !== 'ALL' || timeFilter !== 'any') && (
-            <View style={styles.activeFiltersRow}>
-              {sportFilter !== 'ALL' && (
-                <TouchableOpacity
-                  style={styles.activeFilterChip}
-                  onPress={() => setSportFilter('ALL')}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.activeFilterText}>Sport: {sportFilter} ✕</Text>
-                </TouchableOpacity>
-              )}
-              {campusFilter !== 'ALL' && (
-                <TouchableOpacity
-                  style={styles.activeFilterChip}
-                  onPress={() => setCampusFilter('ALL')}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.activeFilterText}>Campus: {campusFilter} ✕</Text>
-                </TouchableOpacity>
-              )}
-              {timeFilter !== 'any' && (
-                <TouchableOpacity
-                  style={styles.activeFilterChip}
-                  onPress={() => setTimeFilter('any')}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.activeFilterText}>
-                    Time: {timeFilter === 'upcoming' ? 'Upcoming' : 'Past'} ✕
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
+          <View style={styles.filterChipsRow}>
+            <TouchableOpacity
+              style={[styles.filterChip, openFilter === 'sport' && styles.filterChipActive]}
+              onPress={() => setOpenFilter((prev) => (prev === 'sport' ? null : 'sport'))}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.filterChipText, openFilter === 'sport' && styles.filterChipTextActive]}>
+                Sport: {sportFilter === 'ALL' ? 'Any' : sportFilter}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterChip, openFilter === 'campus' && styles.filterChipActive]}
+              onPress={() => setOpenFilter((prev) => (prev === 'campus' ? null : 'campus'))}
+              activeOpacity={0.85}
+            >
+              <Text
+                style={[styles.filterChipText, openFilter === 'campus' && styles.filterChipTextActive]}
+              >
+                Campus: {campusFilter === 'ALL' ? 'Any' : campusFilter}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterChip, openFilter === 'time' && styles.filterChipActive]}
+              onPress={() => setOpenFilter((prev) => (prev === 'time' ? null : 'time'))}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.filterChipText, openFilter === 'time' && styles.filterChipTextActive]}>
+                Time: {timeFilter === 'any' ? 'Any' : timeFilter === 'upcoming' ? 'Upcoming' : 'Past'}
+              </Text>
+            </TouchableOpacity>
+          </View>
 
           {openFilter && (
             <View style={styles.filterOptionsPanel}>
-              <Text style={styles.filterPanelTitle}>Choose a filter</Text>
+              <Text style={styles.filterPanelTitle}>
+                {openFilter === 'sport'
+                  ? 'Choose sport'
+                  : openFilter === 'campus'
+                    ? 'Choose campus'
+                    : 'Choose time'}
+              </Text>
 
-              <Text style={styles.filterPanelCategory}>Sport</Text>
               <View style={styles.filterPanelRow}>
-                {SPORT_OPTIONS.map((option) => (
-                  <TouchableOpacity
-                    key={option}
-                    style={styles.filterOption}
-                    onPress={() => setSportFilter(option)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.filterOptionText}>{option}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={styles.filterPanelCategory}>Campus</Text>
-              <View style={styles.filterPanelRow}>
-                {Object.keys(CAMPUS_COLORS).map((campus) => (
-                  <TouchableOpacity
-                    key={campus}
-                    style={styles.filterOption}
-                    onPress={() => setCampusFilter(campus)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.filterOptionText}>{campus}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={styles.filterPanelCategory}>Time</Text>
-              <View style={styles.filterPanelRow}>
-                <TouchableOpacity
-                  style={styles.filterOption}
-                  onPress={() => setTimeFilter('upcoming')}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.filterOptionText}>Upcoming only</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.filterOption}
-                  onPress={() => setTimeFilter('past')}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.filterOptionText}>Past only</Text>
-                </TouchableOpacity>
+                {openFilter === 'sport' ? (
+                  <>
+                    <TouchableOpacity
+                      style={[
+                        styles.filterOption,
+                        sportFilter === 'ALL' && styles.filterOptionSelected,
+                      ]}
+                      onPress={() => setSportFilter('ALL')}
+                      activeOpacity={0.8}
+                    >
+                      <Text
+                        style={[
+                          styles.filterOptionText,
+                          sportFilter === 'ALL' && styles.filterOptionTextSelected,
+                        ]}
+                      >
+                        Any sport
+                      </Text>
+                    </TouchableOpacity>
+                    {SPORT_OPTIONS.map((option) => (
+                      <TouchableOpacity
+                        key={option}
+                        style={[
+                          styles.filterOption,
+                          sportFilter === option && styles.filterOptionSelected,
+                        ]}
+                        onPress={() => setSportFilter(option)}
+                        activeOpacity={0.8}
+                      >
+                        <Text
+                          style={[
+                            styles.filterOptionText,
+                            sportFilter === option && styles.filterOptionTextSelected,
+                          ]}
+                        >
+                          {option}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </>
+                ) : openFilter === 'campus' ? (
+                  <>
+                    <TouchableOpacity
+                      style={[
+                        styles.filterOption,
+                        campusFilter === 'ALL' && styles.filterOptionSelected,
+                      ]}
+                      onPress={() => setCampusFilter('ALL')}
+                      activeOpacity={0.8}
+                    >
+                      <Text
+                        style={[
+                          styles.filterOptionText,
+                          campusFilter === 'ALL' && styles.filterOptionTextSelected,
+                        ]}
+                      >
+                        Any campus
+                      </Text>
+                    </TouchableOpacity>
+                    {Object.keys(CAMPUS_COLORS).map((campus) => (
+                      <TouchableOpacity
+                        key={campus}
+                        style={[
+                          styles.filterOption,
+                          campusFilter === campus && styles.filterOptionSelected,
+                        ]}
+                        onPress={() => setCampusFilter(campus)}
+                        activeOpacity={0.8}
+                      >
+                        <Text
+                          style={[
+                            styles.filterOptionText,
+                            campusFilter === campus && styles.filterOptionTextSelected,
+                          ]}
+                        >
+                          {campus}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    <TouchableOpacity
+                      style={[styles.filterOption, timeFilter === 'any' && styles.filterOptionSelected]}
+                      onPress={() => setTimeFilter('any')}
+                      activeOpacity={0.8}
+                    >
+                      <Text
+                        style={[
+                          styles.filterOptionText,
+                          timeFilter === 'any' && styles.filterOptionTextSelected,
+                        ]}
+                      >
+                        Any time
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.filterOption,
+                        timeFilter === 'upcoming' && styles.filterOptionSelected,
+                      ]}
+                      onPress={() => setTimeFilter('upcoming')}
+                      activeOpacity={0.8}
+                    >
+                      <Text
+                        style={[
+                          styles.filterOptionText,
+                          timeFilter === 'upcoming' && styles.filterOptionTextSelected,
+                        ]}
+                      >
+                        Upcoming only
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.filterOption, timeFilter === 'past' && styles.filterOptionSelected]}
+                      onPress={() => setTimeFilter('past')}
+                      activeOpacity={0.8}
+                    >
+                      <Text
+                        style={[
+                          styles.filterOptionText,
+                          timeFilter === 'past' && styles.filterOptionTextSelected,
+                        ]}
+                      >
+                        Past only
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                )}
               </View>
 
               <View style={styles.filterPanelActions}>
-                <TouchableOpacity
-                  style={styles.clearFiltersButton}
-                  onPress={() => {
-                    setSportFilter('ALL');
-                    setCampusFilter('ALL');
-                    setTimeFilter('any');
-                    setOpenFilter(null);
-                  }}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.clearFiltersText}>Clear all</Text>
-                </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.doneFiltersButton}
                   onPress={() => setOpenFilter(null)}
@@ -596,13 +725,19 @@ export default function LobbiesScreen() {
           </View>
         ) : (
           <ScrollView contentContainerStyle={styles.listContent}>
-            {filteredLobbies.map((lobby) => {
+            {paginatedLobbies.map((lobby) => {
               const loc = locationForLobby(lobby);
               const when = new Date(lobby.scheduled_start_time);
-              const whenLabel = when.toLocaleString(undefined, {
-                dateStyle: 'medium',
-                timeStyle: 'short',
+              const timeLabel = when.toLocaleTimeString(undefined, {
+                hour: 'numeric',
+                minute: '2-digit',
               });
+              const dateLabel = when.toLocaleDateString(undefined, {
+                month: 'short',
+                day: 'numeric',
+              });
+              const campusLabel = campusForLobby(lobby) || 'Campus TBD';
+              const imageSource = getCampusThumbnail(campusLabel);
 
               return (
                 <Pressable
@@ -610,62 +745,102 @@ export default function LobbiesScreen() {
                   style={({ pressed }) => [styles.lobbyCard, pressed && styles.lobbyCardPressed]}
                   onPress={() => router.push(`/lobby/${lobby.lobby_id}`)}
                 >
-                  <View style={styles.lobbyHeader}>
-                    <View style={{ flex: 1 }}>
-                      <View style={styles.lobbyNameRow}>
-                        <Text style={styles.lobbyName}>{lobby.lobby_name}</Text>
-                        {currentUserId === lobby.host_user_id && (
-                          <View style={styles.yourLobbyPill}>
-                            <Text style={styles.yourLobbyPillText}>your lobby</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={styles.lobbySport}>{lobby.sport}</Text>
-                    </View>
-                    <View
-                      style={[
-                        styles.statusPill,
-                        lobby.status.toLowerCase() !== 'open' && styles.statusPillMuted,
-                      ]}
-                    >
-                      <Text style={styles.statusPillText}>
-                        {lobby.status.charAt(0).toUpperCase() + lobby.status.slice(1)}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.infoRow}>
-                    <MaterialIcons name="schedule" size={18} color={MUTED_TEXT} />
-                    <Text style={styles.infoText}>{whenLabel}</Text>
-                  </View>
-                  <View style={styles.infoRow}>
-                    <MaterialIcons name="place" size={18} color={MUTED_TEXT} />
-                    <Text style={styles.infoText}>
-                      {campusForLobby(lobby)}
-                      {loc ? ` · ${loc.name}` : ''}
-                    </Text>
-                  </View>
-
-                  <View style={styles.metaRow}>
-                    <View style={styles.metaRightCol}>
-                      {lobby.participant_details_hidden !== true &&
-                      lobby.participant_average_elo != null ? (
-                        <Text style={styles.metaText}>
-                          Avg ELO {Math.round(lobby.participant_average_elo)}
+                  <Image source={imageSource} style={styles.campusThumb} />
+                  <View style={styles.lobbyMain}>
+                    <View style={styles.lobbyTopRow}>
+                      <View style={styles.lobbyTitleWrap}>
+                        <Text style={styles.lobbyName} numberOfLines={1}>
+                          {lobby.lobby_name}
                         </Text>
-                      ) : null}
-                      <Text style={styles.metaText}>
-                        {lobby.is_public ? 'Public' : 'Private'}
-                        {lobby.participant_details_hidden
-                          ? ' · Roster hidden · Min ELO '
-                          : ` · ${lobby.participant_count ?? 0}/${lobby.max_players} players · Min ELO `}
-                        {lobby.min_elo ?? 0}
-                      </Text>
+                        <Text style={styles.lobbySubline} numberOfLines={1}>
+                          {loc?.name || campusLabel}
+                        </Text>
+                        <View style={styles.sportMetaRow}>
+                          <View style={styles.sportChip}>
+                            <MaterialIcons
+                              name={sportIconFor(lobby.sport)}
+                              size={13}
+                              color={DARK_NAVY}
+                            />
+                            <Text style={styles.sportChipText} numberOfLines={1}>
+                              {lobby.sport}
+                            </Text>
+                          </View>
+                          <Text style={styles.lobbyMetaLine} numberOfLines={1}>
+                            {campusLabel}
+                          </Text>
+                        </View>
+                        {lobby.participant_details_hidden ? (
+                          <Text style={styles.lobbyMetaLine} numberOfLines={1}>
+                            Roster hidden
+                          </Text>
+                        ) : null}
+                      </View>
+                      <View style={styles.rightCol}>
+                        <Text style={styles.timeText}>{timeLabel}</Text>
+                        <Text style={styles.dateText}>{dateLabel}</Text>
+                        {!lobby.participant_details_hidden ? (
+                          <View style={styles.playersRow}>
+                            <MaterialIcons name="group" size={14} color={MUTED_TEXT} />
+                            <Text style={styles.playersText}>
+                              {lobby.participant_count ?? 0}/{lobby.max_players}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
                     </View>
+                    <View style={styles.bottomRow}>
+                      <Text style={styles.mutedInline}>
+                        {lobby.is_public ? 'Public' : 'Private'} · Min ELO {lobby.min_elo ?? 0}
+                        {currentUserId === lobby.host_user_id ? ' · Open' : ''}
+                      </Text>
+                      <View
+                        style={[
+                          styles.statusPill,
+                          currentUserId === lobby.host_user_id && styles.statusPillHost,
+                          lobby.status.toLowerCase() !== 'open' && styles.statusPillMuted,
+                        ]}
+                      >
+                        <Text style={styles.statusPillText}>
+                          {currentUserId === lobby.host_user_id
+                            ? 'Host'
+                            : lobby.status.charAt(0).toUpperCase() + lobby.status.slice(1)}
+                        </Text>
+                      </View>
+                    </View>
+                    {lobby.participant_details_hidden !== true && lobby.participant_average_elo != null ? (
+                      <Text style={styles.avgEloText}>
+                        Avg ELO {Math.round(lobby.participant_average_elo)}
+                      </Text>
+                    ) : null}
                   </View>
                 </Pressable>
               );
             })}
+
+            {filteredLobbies.length > LOBBIES_PAGE_SIZE ? (
+              <View style={styles.paginationRow}>
+                <TouchableOpacity
+                  style={[styles.pageBtn, page <= 1 && styles.pageBtnDisabled]}
+                  onPress={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.pageBtnText}>Previous</Text>
+                </TouchableOpacity>
+                <Text style={styles.pageText}>
+                  Page {page} of {totalPages}
+                </Text>
+                <TouchableOpacity
+                  style={[styles.pageBtn, page >= totalPages && styles.pageBtnDisabled]}
+                  onPress={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.pageBtnText}>Next</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
           </ScrollView>
         )}
       </View>
@@ -1003,10 +1178,10 @@ const styles = StyleSheet.create({
     backgroundColor: RUTGERS_RED,
   },
   filterSection: {
-    marginBottom: 16,
-    borderRadius: 16,
-    backgroundColor: 'rgba(15,23,42,0.18)',
-    paddingHorizontal: 12,
+    marginBottom: 14,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    paddingHorizontal: 10,
     paddingVertical: 10,
     gap: 8,
   },
@@ -1017,18 +1192,44 @@ const styles = StyleSheet.create({
   },
   filterLabel: {
     color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   addFilterButton: {
     borderRadius: 999,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    paddingHorizontal: 10,
     paddingVertical: 6,
   },
   addFilterText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
+    color: DARK_NAVY,
+  },
+  filterChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  filterChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.45)',
+    backgroundColor: 'rgba(15,23,42,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  filterChipActive: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#FFFFFF',
+  },
+  filterChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#F9FAFB',
+  },
+  filterChipTextActive: {
     color: DARK_NAVY,
   },
   activeFiltersRow: {
@@ -1048,18 +1249,19 @@ const styles = StyleSheet.create({
     color: '#E5E7EB',
   },
   filterOptionsPanel: {
-    marginTop: 10,
-    borderRadius: 12,
-    backgroundColor: 'rgba(15,23,42,0.95)',
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+    marginTop: 4,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     gap: 8,
   },
   filterPanelTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#F9FAFB',
-    marginBottom: 4,
+    fontSize: 12,
+    fontWeight: '700',
+    color: DARK_NAVY,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   filterPanelCategory: {
     fontSize: 12,
@@ -1086,17 +1288,29 @@ const styles = StyleSheet.create({
     color: '#E5E7EB',
   },
   filterOption: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: BORDER_GRAY,
+    backgroundColor: '#F8FAFC',
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
   filterOptionText: {
     fontSize: 13,
-    color: '#F9FAFB',
+    color: DARK_NAVY,
+  },
+  filterOptionSelected: {
+    borderColor: RUTGERS_RED,
+    backgroundColor: 'rgba(204, 0, 51, 0.08)',
+  },
+  filterOptionTextSelected: {
+    color: RUTGERS_RED,
+    fontWeight: '700',
   },
   filterPanelActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    gap: 8,
+    gap: 6,
     marginTop: 6,
   },
   clearFiltersButton: {
@@ -1111,30 +1325,40 @@ const styles = StyleSheet.create({
     color: '#E5E7EB',
   },
   doneFiltersButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: 999,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: DARK_NAVY,
   },
   doneFiltersText: {
     fontSize: 12,
     fontWeight: '600',
-    color: DARK_NAVY,
+    color: '#FFFFFF',
   },
   headerRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 14,
+    gap: 12,
+  },
+  headerTextWrap: {
+    flex: 1,
   },
   heading: {
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: 30,
+    fontWeight: '800',
     color: '#FFFFFF',
+    letterSpacing: -0.4,
+  },
+  subheading: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.86)',
+    marginTop: 4,
   },
   createButton: {
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
@@ -1142,7 +1366,7 @@ const styles = StyleSheet.create({
   },
   createButtonText: {
     color: DARK_NAVY,
-    fontWeight: '600',
+    fontWeight: '700',
     fontSize: 14,
   },
   center: {
@@ -1176,32 +1400,149 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   lobbyCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: LIGHT_GRAY,
-    borderRadius: 18,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: BORDER_GRAY,
+    borderRadius: 20,
+    padding: 12,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 1,
   },
   lobbyCardPressed: {
-    opacity: 0.9,
+    opacity: 0.94,
   },
-  lobbyHeader: {
+  campusThumb: {
+    width: 76,
+    height: 76,
+    borderRadius: 14,
+    marginRight: 12,
+  },
+  lobbyMain: {
+    flex: 1,
+    minWidth: 0,
+  },
+  lobbyTopRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  lobbyNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
     gap: 8,
+  },
+  lobbyTitleWrap: {
+    flex: 1,
+    minWidth: 0,
   },
   lobbyName: {
     fontSize: 16,
     fontWeight: '700',
     color: DARK_NAVY,
+  },
+  lobbySubline: {
+    fontSize: 13,
+    color: '#4B5563',
+    marginTop: 1,
+  },
+  lobbyMetaLine: {
+    fontSize: 12,
+    color: MUTED_TEXT,
+    marginTop: 3,
+  },
+  sportMetaRow: {
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minWidth: 0,
+  },
+  sportChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: BORDER_GRAY,
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    flexShrink: 0,
+  },
+  sportChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: DARK_NAVY,
+  },
+  rightCol: {
+    alignItems: 'flex-end',
+    minWidth: 64,
+  },
+  timeText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: DARK_NAVY,
+  },
+  dateText: {
+    fontSize: 12,
+    color: MUTED_TEXT,
+  },
+  playersRow: {
+    marginTop: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  playersText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: DARK_NAVY,
+  },
+  bottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  mutedInline: {
+    fontSize: 12,
+    color: MUTED_TEXT,
+    flexShrink: 1,
+    paddingRight: 8,
+  },
+  avgEloText: {
+    marginTop: 2,
+    fontSize: 12,
+    color: MUTED_TEXT,
+  },
+  paginationRow: {
+    marginTop: 8,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 6,
+  },
+  pageBtn: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: BORDER_GRAY,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  pageBtnDisabled: {
+    opacity: 0.45,
+  },
+  pageBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: DARK_NAVY,
+  },
+  pageText: {
+    fontSize: 13,
+    color: '#E5E7EB',
+    fontWeight: '600',
   },
   yourLobbyPill: {
     backgroundColor: 'rgba(204, 0, 51, 0.12)',
@@ -1251,6 +1592,9 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 999,
     backgroundColor: 'rgba(34, 197, 94, 0.14)',
+  },
+  statusPillHost: {
+    backgroundColor: 'rgba(204, 0, 51, 0.16)',
   },
   statusPillMuted: {
     backgroundColor: 'rgba(148, 163, 184, 0.18)',

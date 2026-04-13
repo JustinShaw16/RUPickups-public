@@ -354,6 +354,12 @@ def update_lobby(*, lobby_id: UUID, payload: LobbyUpdate) -> dict | None:
     if not response.data or len(response.data) == 0:
         return None
     updated = response.data[0]
+    # If max players changed, recalculate open/closed by capacity.
+    if payload.max_players is not None:
+        sync_lobby_status_with_capacity(lobby_id=lobby_id)
+        refreshed = get_lobby_by_id(lobby_id)
+        if refreshed:
+            updated = refreshed
     _enrich_lobby_row_with_participant_average_elo(updated)
     return updated
 
@@ -361,6 +367,38 @@ def update_lobby(*, lobby_id: UUID, payload: LobbyUpdate) -> dict | None:
 def delete_lobby(*, lobby_id: UUID) -> None:
     db = get_supabase_client()
     db.table("lobby").delete().eq("lobby_id", str(lobby_id)).execute()
+
+
+def sync_lobby_status_with_capacity(*, lobby_id: UUID) -> None:
+    """
+    Auto-toggle lobby status based on capacity:
+    - full  -> closed
+    - has spot -> open
+
+    Only applies to lobbies currently in "open"/"closed" states so we do not
+    override future status flows (e.g. in_progress/completed).
+    """
+    db = get_supabase_client()
+    lobby = get_lobby_by_id(lobby_id)
+    if not lobby:
+        return
+
+    current_status = str(lobby.get("status") or "").lower()
+    if current_status not in {"open", "closed"}:
+        return
+
+    max_players = int(lobby.get("max_players") or 0)
+    if max_players <= 0:
+        return
+
+    participants = get_participants_for_lobby(lobby_id)
+    is_full = len(participants) >= max_players
+    target_status = "closed" if is_full else "open"
+
+    if target_status == current_status:
+        return
+
+    db.table("lobby").update({"status": target_status}).eq("lobby_id", str(lobby_id)).execute()
 
 
 def join_lobby(*, lobby_id: UUID, player_id: str) -> dict:
@@ -372,6 +410,7 @@ def join_lobby(*, lobby_id: UUID, player_id: str) -> dict:
     response = db.table("lobby_participants").insert(insert_data).execute()
     if not response.data:
         raise RuntimeError("Failed to join lobby")
+    sync_lobby_status_with_capacity(lobby_id=lobby_id)
     return response.data[0]
 
 
@@ -393,6 +432,7 @@ def leave_lobby(*, lobby_id: UUID, player_id: str, host_user_id: str) -> dict:
     ).execute()
 
     if not is_host_leaving:
+        sync_lobby_status_with_capacity(lobby_id=lobby_id)
         return {"result": "left", "new_host_user_id": None}
 
     remaining_resp = (
@@ -426,6 +466,7 @@ def leave_lobby(*, lobby_id: UUID, player_id: str, host_user_id: str) -> dict:
         raise RuntimeError(
             f"Failed to transfer host for lobby {lobby_id}: no rows were updated"
         )
+    sync_lobby_status_with_capacity(lobby_id=lobby_id)
     return {"result": "host_transferred", "new_host_user_id": next_host_id}
 
 
