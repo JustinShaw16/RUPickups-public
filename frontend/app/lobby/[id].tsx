@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -32,6 +34,38 @@ const SPORT_OPTIONS = [
   'Badminton',
   'Soccer',
 ] as const;
+
+const CAMPUS_IMAGES = {
+  collegeave: require('../photos/CollegeAve.jpg'),
+  cookdouglass: require('../photos/Cook:Douglass.jpg'),
+  livingston: require('../photos/Livingston.jpg'),
+  busch: require('../photos/Busch.jpg'),
+} as const;
+
+function normalizeCampus(campus: string): string {
+  const compact = campus.trim().toLowerCase().replace(/[^a-z]/g, '');
+  if (compact === 'collegeavenue' || compact === 'collegeave' || compact === 'ca') return 'collegeave';
+  if (compact === 'cookdouglass' || compact === 'cookanddouglass' || compact === 'cd') return 'cookdouglass';
+  return compact;
+}
+
+function campusThumbFor(campus: string | undefined | null) {
+  const key = normalizeCampus(campus ?? '');
+  if (key === 'collegeave') return CAMPUS_IMAGES.collegeave;
+  if (key === 'cookdouglass') return CAMPUS_IMAGES.cookdouglass;
+  if (key === 'livingston') return CAMPUS_IMAGES.livingston;
+  return CAMPUS_IMAGES.busch;
+}
+
+function sportIconFor(sport: string): keyof typeof MaterialIcons.glyphMap {
+  const s = sport.trim().toLowerCase();
+  if (s === 'basketball') return 'sports-basketball';
+  if (s === 'soccer') return 'sports-soccer';
+  if (s === 'tennis') return 'sports-tennis';
+  if (s === 'volleyball') return 'sports-volleyball';
+  if (s === 'pickleball' || s === 'badminton') return 'sports-tennis';
+  return 'sports';
+}
 
 type Lobby = {
   lobby_id: string;
@@ -64,6 +98,8 @@ type Participant = {
   is_ready: boolean;
   current_team: string | null;
 };
+
+type LobbyTab = 'about' | 'participants';
 
 type LeaveLobbyResult = {
   result: 'left' | 'host_transferred' | 'lobby_deleted';
@@ -118,6 +154,7 @@ export default function LobbyDetailScreen() {
   const [showEditPassword, setShowEditPassword] = useState(false);
   const [showEditPasswordConfirm, setShowEditPasswordConfirm] = useState(false);
   const [showJoinPassword, setShowJoinPassword] = useState(false);
+  const [activeTab, setActiveTab] = useState<LobbyTab>('about');
 
   const loadLobby = useCallback(async () => {
     if (!id) return;
@@ -644,6 +681,25 @@ export default function LobbyDetailScreen() {
   const whenLabel = when
     ? when.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
     : '';
+  const campusLabel = lobby?.campus || location?.campus || '';
+  const aboutThumb = campusThumbFor(campusLabel);
+  const hostParticipant = lobby
+    ? participants.find((p) => p.player_id === lobby.host_user_id)
+    : null;
+
+  const openLocationInMaps = useCallback(() => {
+    if (!lobby) return;
+    const query = location?.address || `${lobby.campus} ${location?.name || ''}`.trim();
+    const url = Platform.select({
+      ios: `http://maps.apple.com/?q=${encodeURIComponent(query)}`,
+      android: `geo:0,0?q=${encodeURIComponent(query)}`,
+      default: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`,
+    });
+    if (!url) return;
+    void Linking.openURL(url).catch(() => {
+      /* ignore */
+    });
+  }, [lobby, location]);
 
   if (!id) {
     return (
@@ -689,179 +745,227 @@ export default function LobbyDetailScreen() {
               />
             }
           >
-            <View style={styles.card}>
-              <Text style={styles.lobbyName}>{lobby.lobby_name}</Text>
-              <Text style={styles.sport}>{lobby.sport}</Text>
-
-              <View style={styles.infoRow}>
-                <MaterialIcons name="schedule" size={18} color={MUTED_TEXT} />
-                <Text style={styles.infoText}>{whenLabel}</Text>
-              </View>
-              <View style={styles.infoRow}>
-                <MaterialIcons name="place" size={18} color={MUTED_TEXT} />
-                <Text style={styles.infoText}>
-                  {lobby.campus}
-                  {location ? ` · ${location.name}` : ''}
+            <View style={styles.tabsRow}>
+              <TouchableOpacity
+                style={[styles.tabBtn, activeTab === 'about' && styles.tabBtnActive]}
+                onPress={() => setActiveTab('about')}
+                activeOpacity={0.9}
+              >
+                <Text style={[styles.tabBtnText, activeTab === 'about' && styles.tabBtnTextActive]}>
+                  About
                 </Text>
-              </View>
-              <View style={styles.metaRow}>
-                <View style={[styles.statusPill, lobby.status !== 'open' && styles.statusPillMuted]}>
-                  <Text style={styles.statusPillText}>
-                    {lobby.status.charAt(0).toUpperCase() + lobby.status.slice(1)}
-                  </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tabBtn, activeTab === 'participants' && styles.tabBtnActive]}
+                onPress={() => setActiveTab('participants')}
+                activeOpacity={0.9}
+              >
+                <Text
+                  style={[
+                    styles.tabBtnText,
+                    activeTab === 'participants' && styles.tabBtnTextActive,
+                  ]}
+                >
+                  Participants
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {activeTab === 'about' ? (
+              <View style={styles.section}>
+                <View style={styles.aboutCard}>
+                  <View style={styles.aboutHeroRow}>
+                    <View style={styles.aboutThumbPane}>
+                      <Image source={aboutThumb} style={styles.aboutThumb} />
+                    </View>
+                    <View style={styles.aboutHeroTextWrap}>
+                      <Text style={styles.aboutHeroTitle}>{lobby.lobby_name}</Text>
+                      <View style={styles.aboutSportRow}>
+                        <MaterialIcons name={sportIconFor(lobby.sport)} size={14} color={DARK_NAVY} />
+                        <Text style={styles.aboutSportText}>{lobby.sport}</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.aboutInfoRow}>
+                    <MaterialIcons name="place" size={16} color={MUTED_TEXT} />
+                    <Text style={styles.aboutValue}>
+                      {lobby.campus}
+                      {location ? ` · ${location.name}` : ''}
+                    </Text>
+                  </View>
+
+                  <View style={styles.aboutInfoRow}>
+                    <MaterialIcons name="schedule" size={16} color={MUTED_TEXT} />
+                    <Text style={styles.aboutValue}>{whenLabel}</Text>
+                  </View>
+
+                  <View style={styles.aboutInfoRow}>
+                    <MaterialIcons name="person" size={16} color={MUTED_TEXT} />
+                    <Pressable onPress={() => router.push(`/player-profile/${lobby.host_user_id}`)}>
+                      <Text style={styles.aboutLinkValue}>
+                        {hostParticipant?.username || 'View host profile'}
+                      </Text>
+                    </Pressable>
+                  </View>
+
+                  <View style={styles.aboutInfoRow}>
+                    <MaterialIcons name="trending-up" size={16} color={MUTED_TEXT} />
+                    <Text style={styles.aboutValue}>
+                      Min {lobbyMinElo} · Avg{' '}
+                      {!rosterHidden && lobby.participant_average_elo != null
+                        ? Math.round(lobby.participant_average_elo)
+                        : 'Hidden'}
+                    </Text>
+                  </View>
                 </View>
-                <View style={styles.metaRightCol}>
-                  {!rosterHidden && lobby.participant_average_elo != null ? (
-                    <Text style={styles.metaText}>
-                      Avg ELO {Math.round(lobby.participant_average_elo)}
+
+                <Pressable style={styles.mapCard} onPress={openLocationInMaps}>
+                  <MaterialIcons name="place" size={22} color={RUTGERS_RED} />
+                  <View style={styles.mapCardTextWrap}>
+                    <Text style={styles.mapCardTitle}>Court map</Text>
+                    <Text style={styles.mapCardSubtitle}>
+                      Open pin for {location?.name || lobby.campus} in Maps
+                    </Text>
+                  </View>
+                  <MaterialIcons name="open-in-new" size={20} color={MUTED_TEXT} />
+                </Pressable>
+
+                {isHost ? (
+                  <View style={styles.hostActionsRow}>
+                    <TouchableOpacity style={styles.editButton} onPress={openEdit} activeOpacity={0.9}>
+                      <MaterialIcons name="edit" size={20} color={RUTGERS_RED} />
+                      <Text style={styles.editButtonText}>Edit lobby</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.deleteButton}
+                      onPress={handleDelete}
+                      activeOpacity={0.9}
+                    >
+                      <MaterialIcons name="delete-outline" size={20} color="#FFFFFF" />
+                      <Text style={styles.deleteButtonText}>Delete lobby</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+              </View>
+            ) : (
+              <>
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>
+                    {isParticipant ? 'You are in this lobby' : 'Join'}
+                  </Text>
+                  {joinError ? <Text style={styles.errorText}>{joinError}</Text> : null}
+                  {!isParticipant && isBelowMinElo ? (
+                    <Text style={styles.mutedText}>
+                      Your {lobby.sport} ELO ({myEloForLobbySport}) is below this lobby&apos;s minimum (
+                      {lobbyMinElo}).
                     </Text>
                   ) : null}
-                  <Text style={styles.metaText}>
-                    {rosterHidden
-                      ? `${lobby.max_players} players max · Private · Roster hidden · Min ELO ${lobbyMinElo}`
-                      : `${lobby.max_players} players max · ${lobby.is_public ? 'Public' : 'Private'} · Min ELO ${lobbyMinElo}`}
-                  </Text>
+                  {isParticipant ? (
+                    <TouchableOpacity
+                      style={[styles.leaveButton, leaving && styles.joinButtonDisabled]}
+                      onPress={handleLeave}
+                      disabled={leaving}
+                      activeOpacity={0.9}
+                    >
+                      <Text style={styles.leaveButtonText}>
+                        {leaving ? 'Leaving…' : 'Leave lobby'}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      style={[styles.joinButton, joining && styles.joinButtonDisabled]}
+                      onPress={handleJoin}
+                      disabled={joining || lobby.status !== 'open' || isLobbyFull || isBelowMinElo}
+                      activeOpacity={0.9}
+                    >
+                      <Text style={styles.joinButtonText}>
+                        {joining
+                          ? 'Joining…'
+                          : isLobbyFull
+                            ? 'Lobby full'
+                            : isBelowMinElo
+                              ? 'ELO too low'
+                              : joinRequiresPassword
+                                ? 'Join this private lobby'
+                                : 'Join this lobby'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
-              </View>
-            </View>
 
-            {isHost && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Host actions</Text>
-                <View style={styles.hostActionsRow}>
-                  <TouchableOpacity
-                    style={styles.editButton}
-                    onPress={openEdit}
-                    activeOpacity={0.9}
-                  >
-                    <MaterialIcons name="edit" size={20} color={RUTGERS_RED} />
-                    <Text style={styles.editButtonText}>Edit lobby</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={handleDelete}
-                    activeOpacity={0.9}
-                  >
-                    <MaterialIcons name="delete-outline" size={20} color="#FFFFFF" />
-                    <Text style={styles.deleteButtonText}>Delete lobby</Text>
-                  </TouchableOpacity>
-                </View>
-                <TouchableOpacity
-                  style={[styles.createMatchButton, creatingMatch && styles.joinButtonDisabled]}
-                  onPress={() => void handleCreateMatch()}
-                  disabled={creatingMatch}
-                  activeOpacity={0.9}
-                >
-                  <Text style={styles.createMatchButtonText}>
-                    {creatingMatch ? 'Creating match…' : 'Create match'}
+                {isHost ? (
+                  <View style={styles.section}>
+                    <TouchableOpacity
+                      style={[styles.createMatchButton, creatingMatch && styles.joinButtonDisabled]}
+                      onPress={() => void handleCreateMatch()}
+                      disabled={creatingMatch}
+                      activeOpacity={0.9}
+                    >
+                      <Text style={styles.createMatchButtonText}>
+                        {creatingMatch ? 'Starting match…' : 'Start match'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>
+                    {rosterHidden ? 'Participants' : `Participants (${participants.length})`}
                   </Text>
-                </TouchableOpacity>
-              </View>
+                  <View style={styles.participantList}>
+                    {rosterHidden ? (
+                      <Text style={styles.emptyParticipants}>
+                        Hidden — tap &quot;Join this private lobby&quot; and enter the password to see who is
+                        playing.
+                      </Text>
+                    ) : participants.length === 0 ? (
+                      <Text style={styles.emptyParticipants}>No participants yet.</Text>
+                    ) : (
+                      participants.map((p) => (
+                        <View key={p.player_id} style={styles.participantRow}>
+                          <Pressable
+                            onPress={() => router.push(`/player-profile/${p.player_id}`)}
+                            style={({ pressed }) => [
+                              styles.participantProfileTrigger,
+                              pressed && styles.participantProfileTriggerPressed,
+                            ]}
+                            accessibilityRole="button"
+                            accessibilityLabel={`View ${p.username}'s profile`}
+                          >
+                            <View style={styles.participantAvatar}>
+                              <Text style={styles.participantAvatarText}>
+                                {(p.username || '?').charAt(0).toUpperCase()}
+                              </Text>
+                            </View>
+                            <View style={styles.participantInfo}>
+                              <View style={styles.participantNameRow}>
+                                <Text style={styles.participantName}>{p.username}</Text>
+                                {lobby && p.player_id === lobby.host_user_id && (
+                                  <MaterialCommunityIcons
+                                    name="crown"
+                                    size={18}
+                                    color={RUTGERS_RED}
+                                    style={styles.hostIcon}
+                                  />
+                                )}
+                              </View>
+                              {(p.current_team || p.is_ready) && (
+                                <Text style={styles.participantMeta}>
+                                  {[p.current_team, p.is_ready ? 'Ready' : null]
+                                    .filter(Boolean)
+                                    .join(' · ')}
+                                </Text>
+                              )}
+                            </View>
+                          </Pressable>
+                        </View>
+                      ))
+                    )}
+                  </View>
+                </View>
+              </>
             )}
-
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>
-                {isParticipant ? 'You are in this lobby' : 'Join'}
-              </Text>
-              {joinError ? <Text style={styles.errorText}>{joinError}</Text> : null}
-              {!isParticipant && isBelowMinElo ? (
-                <Text style={styles.mutedText}>
-                  Your {lobby.sport} ELO ({myEloForLobbySport}) is below this lobby&apos;s minimum (
-                  {lobbyMinElo}).
-                </Text>
-              ) : null}
-              {isParticipant ? (
-                <TouchableOpacity
-                  style={[styles.leaveButton, leaving && styles.joinButtonDisabled]}
-                  onPress={handleLeave}
-                  disabled={leaving}
-                  activeOpacity={0.9}
-                >
-                  <Text style={styles.leaveButtonText}>
-                    {leaving ? 'Leaving…' : 'Leave lobby'}
-                  </Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity
-                  style={[styles.joinButton, joining && styles.joinButtonDisabled]}
-                  onPress={handleJoin}
-                  disabled={
-                    joining ||
-                    lobby.status !== 'open' ||
-                    isLobbyFull ||
-                    isBelowMinElo
-                  }
-                  activeOpacity={0.9}
-                >
-                  <Text style={styles.joinButtonText}>
-                    {joining
-                      ? 'Joining…'
-                      : isLobbyFull
-                          ? 'Lobby full'
-                          : isBelowMinElo
-                            ? 'ELO too low'
-                          : joinRequiresPassword
-                            ? 'Join this private lobby'
-                            : 'Join this lobby'}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>
-                {rosterHidden ? 'Participants' : `Participants (${participants.length})`}
-              </Text>
-              <View style={styles.participantList}>
-                {rosterHidden ? (
-                  <Text style={styles.emptyParticipants}>
-                    Hidden — tap &quot;Join this private lobby&quot; and enter the password to see who is playing.
-                  </Text>
-                ) : participants.length === 0 ? (
-                  <Text style={styles.emptyParticipants}>No participants yet.</Text>
-                ) : (
-                  participants.map((p) => (
-                    <View key={p.player_id} style={styles.participantRow}>
-                      <Pressable
-                        onPress={() => router.push(`/player-profile/${p.player_id}`)}
-                        style={({ pressed }) => [
-                          styles.participantProfileTrigger,
-                          pressed && styles.participantProfileTriggerPressed,
-                        ]}
-                        accessibilityRole="button"
-                        accessibilityLabel={`View ${p.username}'s profile`}
-                      >
-                        <View style={styles.participantAvatar}>
-                          <Text style={styles.participantAvatarText}>
-                            {(p.username || '?').charAt(0).toUpperCase()}
-                          </Text>
-                        </View>
-                        <View style={styles.participantInfo}>
-                          <View style={styles.participantNameRow}>
-                            <Text style={styles.participantName}>{p.username}</Text>
-                            {lobby && p.player_id === lobby.host_user_id && (
-                              <MaterialCommunityIcons
-                                name="crown"
-                                size={18}
-                                color={RUTGERS_RED}
-                                style={styles.hostIcon}
-                              />
-                            )}
-                          </View>
-                          {(p.current_team || p.is_ready) && (
-                            <Text style={styles.participantMeta}>
-                              {[p.current_team, p.is_ready ? 'Ready' : null]
-                                .filter(Boolean)
-                                .join(' · ')}
-                            </Text>
-                          )}
-                        </View>
-                      </Pressable>
-                    </View>
-                  ))
-                )}
-              </View>
-            </View>
           </ScrollView>
         ) : null}
       </View>
@@ -1374,6 +1478,123 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
     marginBottom: 12,
+  },
+  tabsRow: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 999,
+    padding: 4,
+    marginBottom: 16,
+  },
+  tabBtn: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  tabBtnActive: {
+    backgroundColor: '#FFFFFF',
+  },
+  tabBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  tabBtnTextActive: {
+    color: DARK_NAVY,
+  },
+  aboutCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER_GRAY,
+    padding: 14,
+    gap: 10,
+  },
+  aboutHeroRow: {
+    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 10,
+    marginBottom: 2,
+    minHeight: 92,
+  },
+  aboutHeroTextWrap: {
+    flex: 1,
+    justifyContent: 'center',
+    maxWidth: '56%',
+    zIndex: 1,
+  },
+  aboutThumbPane: {
+    position: 'absolute',
+    right: -15,
+    top: -15,
+    height: 230,
+    width: 700,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#EEF2F7',
+    opacity: 0.96,
+  },
+  aboutThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  aboutHeroTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: DARK_NAVY,
+  },
+  aboutSportRow: {
+    marginTop: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  aboutSportText: {
+    fontSize: 13,
+    color: MUTED_TEXT,
+    fontWeight: '600',
+  },
+  aboutInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  aboutValue: {
+    fontSize: 14,
+    color: DARK_NAVY,
+    fontWeight: '500',
+  },
+  aboutLinkValue: {
+    fontSize: 14,
+    color: RUTGERS_RED,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
+  },
+  mapCard: {
+    marginTop: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER_GRAY,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  mapCardTextWrap: {
+    flex: 1,
+  },
+  mapCardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: DARK_NAVY,
+  },
+  mapCardSubtitle: {
+    marginTop: 2,
+    fontSize: 12,
+    color: MUTED_TEXT,
   },
   createMatchButton: {
     marginTop: 12,
