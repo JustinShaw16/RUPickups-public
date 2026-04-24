@@ -77,8 +77,7 @@ export default function RootLayout() {
 
         const hasProfile =
           !!user?.username &&
-          !!user?.preferred_campus &&
-          !!user?.phone_number
+          !!user?.preferred_campus
 
         if (!hasProfile) {
           if (!inCompleteProfile) router.replace('/complete-profile')
