@@ -13,6 +13,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { authedFetch, authedFetchForLobby } from '@/api/backend';
 import { Modal } from 'react-native';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 type Match = {
   match_id: string;
@@ -57,7 +58,6 @@ export default function MatchPage() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [leaving, setLeaving] = useState(false);
 
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [teamSlots, setTeamSlots] = useState<TeamSlotsState>({ teamA: [], teamB: [] });
@@ -79,17 +79,16 @@ export default function MatchPage() {
   }, [lobby?.max_players]);
 
   const patchPlayerStats = async (
-      endpoint: '/player-stats/win' | '/player-stats/lose',
-      userIds: string[],
-      sport: string
+    endpoint: '/player-stats/win' | '/player-stats/lose',
+    userIds: string[],
+    sport: string
   ) => {
-      const params = new URLSearchParams();
-      userIds.forEach((id) => params.append('user_ids', id)); // repeated query key
-      params.append('sport', sport);
- 
-      return authedFetch(`${endpoint}?${params.toString()}`, { method: 'PATCH' });
-  };
+    const params = new URLSearchParams();
+    userIds.forEach((id) => params.append('user_ids', id)); // repeated query key
+    params.append('sport', sport);
 
+    return authedFetch(`${endpoint}?${params.toString()}`, { method: 'PATCH' });
+  };
 
   const resizeSlots = useCallback((arr: Array<string | null>, size: number) => {
     if (arr.length === size) return arr;
@@ -117,17 +116,12 @@ export default function MatchPage() {
     }
   }, [players, selectedPlayerId]);
 
-  const playersById = useMemo(
-    () => new Map(players.map((p) => [p.player_id, p])),
-    [players]
-  );
+  const playersById = useMemo(() => new Map(players.map((p) => [p.player_id, p])), [players]);
 
   const assignedIds = useMemo(
     () =>
       new Set(
-        [...teamSlots.teamA, ...teamSlots.teamB].filter(
-          (id): id is string => id !== null
-        )
+        [...teamSlots.teamA, ...teamSlots.teamB].filter((id): id is string => id !== null)
       ),
     [teamSlots]
   );
@@ -157,31 +151,13 @@ export default function MatchPage() {
     setSelectedPlayerId(null);
   };
 
-  const handleLeaveLobby = async () => {
-    if (leaving || !match?.lobby_id) return;
-
-    setLeaving(true);
-    try {
-      const res = await authedFetch(`/lobbies/${match.lobby_id}/leave`, {
-        method: 'POST',
-      });
-
-      if (!res.ok) {
-        const msg = await res.text().catch(() => '');
-        throw new Error(msg || 'Failed to leave lobby.');
-      }
-
+  const handleBackToLobby = () => {
+    if (!match?.lobby_id) {
       router.replace('/(tabs)/lobbies');
-    } catch (e) {
-      const message = e instanceof Error ? e.message : 'Failed to leave lobby.';
-      if (Platform.OS === 'web') {
-        window.alert(message);
-      } else {
-        Alert.alert('Leave Lobby', message);
-      }
-    } finally {
-      setLeaving(false);
+      return;
     }
+
+    router.replace({ pathname: '/lobby/[id]', params: { id: match.lobby_id } });
   };
 
   const load = useCallback(async () => {
@@ -234,13 +210,13 @@ export default function MatchPage() {
   }, [load]);
 
   useEffect(() => {
-      if (!matchRunning || startedAtMs == null) return;
- 
-      const interval = setInterval(() => {
-        setElapsedMs(Date.now() - startedAtMs);
-      }, 1000);
- 
-      return () => clearInterval(interval);
+    if (!matchRunning || startedAtMs == null) return;
+
+    const interval = setInterval(() => {
+      setElapsedMs(Date.now() - startedAtMs);
+    }, 1000);
+
+    return () => clearInterval(interval);
   }, [matchRunning, startedAtMs]);
 
   const handleRandomizeTeams = async () => {
@@ -248,13 +224,13 @@ export default function MatchPage() {
 
     try {
       const params = new URLSearchParams();
-      players.forEach((p) => params.append("match_players", p.player_id));
-      params.append("match_sport", lobby.sport);
+      players.forEach((p) => params.append('match_players', p.player_id));
+      params.append('match_sport', lobby.sport);
 
-      const res = await authedFetch(`/matches/matchmaking?${params.toString()}`)
+      const res = await authedFetch(`/matches/matchmaking?${params.toString()}`);
 
       if (!res.ok) {
-        throw new Error("Failed to randomize teams");
+        throw new Error('Failed to randomize teams');
       }
 
       const data = await res.json();
@@ -270,147 +246,148 @@ export default function MatchPage() {
         teamB: resizeSlots(teamBIds, teamBSlots),
       });
 
-      console.log("MATCHMAKING RESPONSE:", data);
-
+      console.log('MATCHMAKING RESPONSE:', data);
     } catch (e) {
-      const message = e instanceof Error ? e.message : "Failed to randomize teams.";
-      Alert.alert("Randomize Teams", message);
+      const message = e instanceof Error ? e.message : 'Failed to randomize teams.';
+      Alert.alert('Randomize Teams', message);
     }
   };
 
   const onStartMatch = async () => {
-      if (submitting || matchRunning || !match?.match_id) return;
-      setSubmitting(true);
- 
-      try {
-        const teamAPlayerIds = teamSlots.teamA.filter((id): id is string => Boolean(id));
-        const teamBPlayerIds = teamSlots.teamB.filter((id): id is string => Boolean(id));
-        
-        if (teamAPlayerIds.length === 0 || teamBPlayerIds.length === 0) {
-          Alert.alert('Start Match', 'Assign at least one player to each team.');
-          return;
-        }
- 
-        const res = await authedFetch('/match-players/', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            match_id: match.match_id,
-            team_A_player_ids: teamAPlayerIds,
-            team_B_player_ids: teamBPlayerIds,
-          }),
-        });
- 
-        if (!res.ok) {
-          const msg = await res.text().catch(() => '');
-          throw new Error(msg || `Failed to create match players (${res.status})`);
-        }
- 
-        const now = Date.now();
-        setStartedAtMs(now);
-        setElapsedMs(0);
-        setMatchRunning(true);
-      } catch (e) {
-        const message = e instanceof Error ? e.message : 'Failed to start match.';
-        if (Platform.OS === 'web') window.alert(message);
-        else Alert.alert('Start Match', message);
-      } finally {
-        setSubmitting(false);
+    if (submitting || matchRunning || !match?.match_id) return;
+    setSubmitting(true);
+
+    try {
+      const teamAPlayerIds = teamSlots.teamA.filter((id): id is string => Boolean(id));
+      const teamBPlayerIds = teamSlots.teamB.filter((id): id is string => Boolean(id));
+
+      if (teamAPlayerIds.length === 0 || teamBPlayerIds.length === 0) {
+        Alert.alert('Start Match', 'Assign at least one player to each team.');
+        return;
       }
+
+      const res = await authedFetch('/match-players/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          match_id: match.match_id,
+          team_A_player_ids: teamAPlayerIds,
+          team_B_player_ids: teamBPlayerIds,
+        }),
+      });
+
+      if (!res.ok) {
+        const msg = await res.text().catch(() => '');
+        throw new Error(msg || `Failed to create match players (${res.status})`);
+      }
+
+      const now = Date.now();
+      setStartedAtMs(now);
+      setElapsedMs(0);
+      setMatchRunning(true);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Failed to start match.';
+      if (Platform.OS === 'web') window.alert(message);
+      else Alert.alert('Start Match', message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const onEndMatch = () => {
-      if (submitting || !matchRunning) return;
-      setSelectedWinner(null);
-      setWinnerModalVisible(true);
+    if (submitting || !matchRunning) return;
+    setSelectedWinner(null);
+    setWinnerModalVisible(true);
   };
 
-    const onConfirmWinner = async () => {
-        if (!selectedWinner || !match?.match_id) {
-            Alert.alert('End Match', 'Please choose a winner.');
-            return;
-        }
+  const onConfirmWinner = async () => {
+    if (!selectedWinner || !match?.match_id) {
+      Alert.alert('End Match', 'Please choose a winner.');
+      return;
+    }
 
-        const teamAIds = teamSlots.teamA.filter((id): id is string => Boolean(id));
-        const teamBIds = teamSlots.teamB.filter((id): id is string => Boolean(id));
+    const teamAIds = teamSlots.teamA.filter((id): id is string => Boolean(id));
+    const teamBIds = teamSlots.teamB.filter((id): id is string => Boolean(id));
 
-        const winnerIds = selectedWinner === 'team_a' ? teamAIds : teamBIds;
-        const loserIds = selectedWinner === 'team_a' ? teamBIds : teamAIds;
+    const winnerIds = selectedWinner === 'team_a' ? teamAIds : teamBIds;
+    const loserIds = selectedWinner === 'team_a' ? teamBIds : teamAIds;
 
-        if (winnerIds.length === 0 || loserIds.length === 0) {
-            Alert.alert('End Match', 'Both teams need at least one assigned player.');
-            return;
-        }
+    if (winnerIds.length === 0 || loserIds.length === 0) {
+      Alert.alert('End Match', 'Both teams need at least one assigned player.');
+      return;
+    }
 
-        const sport = lobby?.sport ?? 'Basketball';
-        const lobbyId = match.lobby_id;
+    const sport = lobby?.sport ?? 'Basketball';
+    const lobbyId = match.lobby_id;
 
-        setSubmitting(true);
-        try {
-            const params = new URLSearchParams();
-            winnerIds.forEach((id) => params.append('winner_ids', id));
-            loserIds.forEach((id) => params.append('loser_ids', id));
-            params.append('sport', sport);
+    setSubmitting(true);
+    try {
+      const params = new URLSearchParams();
+      winnerIds.forEach((id) => params.append('winner_ids', id));
+      loserIds.forEach((id) => params.append('loser_ids', id));
+      params.append('sport', sport);
 
-            const processRes = await authedFetch(`/player-stats/process?${params.toString()}`, {
-            method: 'PATCH',
-            });
+      const processRes = await authedFetch(`/player-stats/process?${params.toString()}`, {
+        method: 'PATCH',
+      });
 
-            if (!processRes.ok) {
-            const msg = await processRes.text().catch(() => '');
-            throw new Error(msg || `Failed to process match stats (${processRes.status})`);
-            }
+      if (!processRes.ok) {
+        const msg = await processRes.text().catch(() => '');
+        throw new Error(msg || `Failed to process match stats (${processRes.status})`);
+      }
 
-            const deleteRes = await authedFetch(
-            `/match-players/?match_id=${encodeURIComponent(match.match_id)}`,
-            { method: 'DELETE' }
-            );
+      const deleteRes = await authedFetch(
+        `/match-players/?match_id=${encodeURIComponent(match.match_id)}`,
+        { method: 'DELETE' }
+      );
 
-            if (!deleteRes.ok) {
-            const msg = await deleteRes.text().catch(() => '');
-            throw new Error(msg || `Failed to delete match players (${deleteRes.status})`);
-            }
+      if (!deleteRes.ok) {
+        const msg = await deleteRes.text().catch(() => '');
+        throw new Error(msg || `Failed to delete match players (${deleteRes.status})`);
+      }
 
-            setMatchRunning(false);
-            setWinnerModalVisible(false);
-            setSelectedWinner(null);
+      setMatchRunning(false);
+      setWinnerModalVisible(false);
+      setSelectedWinner(null);
 
-            router.replace({ pathname: '/lobby/[id]', params: { id: lobbyId } });
-        } catch (e) {
-            const message = e instanceof Error ? e.message : 'Failed to end match.';
-            if (Platform.OS === 'web') window.alert(message);
-            else Alert.alert('End Match', message);
-        } finally {
-            setSubmitting(false);
-        }
-    };
+      router.replace({ pathname: '/lobby/[id]', params: { id: lobbyId } });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Failed to end match.';
+      if (Platform.OS === 'web') window.alert(message);
+      else Alert.alert('End Match', message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const formatDuration = (ms: number) => {
-      const totalSec = Math.floor(ms / 1000);
-      const h = Math.floor(totalSec / 3600).toString().padStart(2, '0');
-      const m = Math.floor((totalSec % 3600) / 60).toString().padStart(2, '0');
-      const s = Math.floor(totalSec % 60).toString().padStart(2, '0');
-      return `${h}:${m}:${s}`;
+    const totalSec = Math.floor(ms / 1000);
+    const h = Math.floor(totalSec / 3600)
+      .toString()
+      .padStart(2, '0');
+    const m = Math.floor((totalSec % 3600) / 60)
+      .toString()
+      .padStart(2, '0');
+    const s = Math.floor(totalSec % 60)
+      .toString()
+      .padStart(2, '0');
+    return `${h}:${m}:${s}`;
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.headerRow}>
-          <Text style={styles.title}>Match</Text>
           <Pressable
-            onPress={() => void handleLeaveLobby()}
-            disabled={leaving}
-            style={({ pressed }) => [
-              styles.leaveButton,
-              pressed && styles.leaveButtonPressed,
-              leaving && styles.leaveButtonDisabled,
-            ]}
+            onPress={handleBackToLobby}
+            style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Back to lobby"
           >
-            <Text style={styles.leaveButtonText}>
-              {leaving ? 'Leaving…' : 'Leave Lobby'}
-            </Text>
+            <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
           </Pressable>
+          <Text style={styles.title}>Match</Text>
+          <View style={styles.headerSpacer} />
         </View>
 
         {loading ? (
@@ -426,25 +403,17 @@ export default function MatchPage() {
           <>
             <Text style={styles.timerText}>{formatDuration(elapsedMs)}</Text>
             {matchRunning ? (
-            <Pressable
-                onPress={() => void onEndMatch()}
-                style={styles.endButton}
-                disabled={submitting}
-            >
-                <Text style={styles.endButtonText}>
-                {submitting ? 'Ending…' : 'End Match'}
-                </Text>
-            </Pressable>
+              <Pressable onPress={() => void onEndMatch()} style={styles.endButton} disabled={submitting}>
+                <Text style={styles.endButtonText}>{submitting ? 'Ending…' : 'End Match'}</Text>
+              </Pressable>
             ) : (
-            <Pressable
+              <Pressable
                 onPress={() => void onStartMatch()}
                 style={styles.startButton}
                 disabled={submitting}
-            >
-                <Text style={styles.startButtonText}>
-                {submitting ? 'Starting…' : 'Start Match'}
-                </Text>
-            </Pressable>
+              >
+                <Text style={styles.startButtonText}>{submitting ? 'Starting…' : 'Start Match'}</Text>
+              </Pressable>
             )}
 
             <View style={styles.section}>
@@ -469,9 +438,7 @@ export default function MatchPage() {
                         ]}
                       >
                         <View style={styles.avatar}>
-                          <Text style={styles.avatarText}>
-                            {p.username.charAt(0).toUpperCase()}
-                          </Text>
+                          <Text style={styles.avatarText}>{p.username.charAt(0).toUpperCase()}</Text>
                         </View>
 
                         <Text style={styles.playerName}>{p.username}</Text>
@@ -493,10 +460,7 @@ export default function MatchPage() {
             <View style={styles.section}>
               <Pressable
                 onPress={() => void handleRandomizeTeams()}
-                style={({ pressed }) => [
-                  styles.randomizeButton,
-                  pressed && { opacity: 0.85 },
-                ]}
+                style={({ pressed }) => [styles.randomizeButton, pressed && { opacity: 0.85 }]}
               >
                 <Text style={styles.randomizeButtonText}>Randomize Teams</Text>
               </Pressable>
@@ -513,10 +477,7 @@ export default function MatchPage() {
                     <Pressable
                       key={`a-${i}`}
                       onPress={() => handleSlotPress('teamA', i)}
-                      style={[
-                        styles.slotRow,
-                        isEmpty && selectedPlayerId && styles.slotRowTarget,
-                      ]}
+                      style={[styles.slotRow, isEmpty && selectedPlayerId && styles.slotRowTarget]}
                     >
                       <Text style={player ? styles.slotFilledText : styles.slotText}>
                         {player ? player.username : `Slot ${i + 1} · Empty`}
@@ -537,10 +498,7 @@ export default function MatchPage() {
                     <Pressable
                       key={`b-${i}`}
                       onPress={() => handleSlotPress('teamB', i)}
-                      style={[
-                        styles.slotRow,
-                        isEmpty && selectedPlayerId && styles.slotRowTarget,
-                      ]}
+                      style={[styles.slotRow, isEmpty && selectedPlayerId && styles.slotRowTarget]}
                     >
                       <Text style={player ? styles.slotFilledText : styles.slotText}>
                         {player ? player.username : `Slot ${i + 1} · Empty`}
@@ -553,73 +511,67 @@ export default function MatchPage() {
           </>
         )}
       </ScrollView>
-        <Modal
+      <Modal
         visible={winnerModalVisible}
         transparent
         animationType="fade"
         onRequestClose={() => setWinnerModalVisible(false)}
-        >
+      >
         <View style={styles.modalBackdrop}>
-            <View style={styles.modalCard}>
+          <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Who won the match?</Text>
 
             <Pressable
-                onPress={() => setSelectedWinner('team_a')}
-                style={[
-                styles.winnerOption,
-                selectedWinner === 'team_a' && styles.winnerOptionSelected,
-                ]}
+              onPress={() => setSelectedWinner('team_a')}
+              style={[styles.winnerOption, selectedWinner === 'team_a' && styles.winnerOptionSelected]}
             >
-                <Text
+              <Text
                 style={[
-                    styles.winnerOptionText,
-                    selectedWinner === 'team_a' && styles.winnerOptionTextSelected,
+                  styles.winnerOptionText,
+                  selectedWinner === 'team_a' && styles.winnerOptionTextSelected,
                 ]}
-                >
+              >
                 Team A
-                </Text>
+              </Text>
             </Pressable>
 
             <Pressable
-                onPress={() => setSelectedWinner('team_b')}
-                style={[
-                styles.winnerOption,
-                selectedWinner === 'team_b' && styles.winnerOptionSelected,
-                ]}
+              onPress={() => setSelectedWinner('team_b')}
+              style={[styles.winnerOption, selectedWinner === 'team_b' && styles.winnerOptionSelected]}
             >
-                <Text
+              <Text
                 style={[
-                    styles.winnerOptionText,
-                    selectedWinner === 'team_b' && styles.winnerOptionTextSelected,
+                  styles.winnerOptionText,
+                  selectedWinner === 'team_b' && styles.winnerOptionTextSelected,
                 ]}
-                >
+              >
                 Team B
-                </Text>
+              </Text>
             </Pressable>
 
             <Pressable
-                onPress={() => void onConfirmWinner()}
-                disabled={!selectedWinner || submitting}
-                style={[
+              onPress={() => void onConfirmWinner()}
+              disabled={!selectedWinner || submitting}
+              style={[
                 styles.confirmWinnerButton,
                 (!selectedWinner || submitting) && styles.confirmWinnerButtonDisabled,
-                ]}
+              ]}
             >
-                <Text style={styles.confirmWinnerButtonText}>
+              <Text style={styles.confirmWinnerButtonText}>
                 {submitting ? 'Confirming…' : 'Confirm'}
-                </Text>
+              </Text>
             </Pressable>
 
             <Pressable
-                onPress={() => setWinnerModalVisible(false)}
-                style={styles.cancelModalButton}
-                disabled={submitting}
+              onPress={() => setWinnerModalVisible(false)}
+              style={styles.cancelModalButton}
+              disabled={submitting}
             >
-                <Text style={styles.cancelModalButtonText}>Cancel</Text>
+              <Text style={styles.cancelModalButtonText}>Cancel</Text>
             </Pressable>
-            </View>
+          </View>
         </View>
-        </Modal>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -635,24 +587,19 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   title: { fontSize: 26, fontWeight: '700', color: '#FFFFFF' },
-
-  leaveButton: {
-    borderWidth: 1.5,
-    borderColor: '#FFFFFF',
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+  backButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  leaveButtonPressed: {
-    opacity: 0.8,
+  backButtonPressed: {
+    opacity: 0.75,
   },
-  leaveButtonDisabled: {
-    opacity: 0.6,
-  },
-  leaveButtonText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
+  headerSpacer: {
+    width: 36,
+    height: 36,
   },
 
   center: { alignItems: 'center', justifyContent: 'center', minHeight: 220 },
@@ -745,25 +692,25 @@ const styles = StyleSheet.create({
   emptyText: { color: MUTED_TEXT, fontSize: 14 },
 
   timerText: {
-      color: '#FFFFFF',
-      fontSize: 24,
-      fontWeight: '700',
-      textAlign: 'center',
-      marginBottom: 10,
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: 10,
   },
 
   endButton: {
-      backgroundColor: '#B91C1C',
-      borderRadius: 14,
-      paddingVertical: 14,
-      alignItems: 'center',
-      marginBottom: 24,
+    backgroundColor: '#B91C1C',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginBottom: 24,
   },
 
   endButtonText: {
-      color: '#FFFFFF',
-      fontSize: 16,
-      fontWeight: '700',
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
   },
 
   modalBackdrop: {
