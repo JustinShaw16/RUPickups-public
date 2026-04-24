@@ -24,6 +24,25 @@ const CAMPUS_OPTIONS = [
 ] as const
 
 type CampusOption = (typeof CAMPUS_OPTIONS)[number]
+const MAX_USERNAME_LENGTH = 30
+const MAX_PHONE_NUMBER_LENGTH = 20
+
+const containsEmoji = (value: string) => {
+  for (const char of value) {
+    const codepoint = char.codePointAt(0) ?? 0
+    if (
+      (codepoint >= 0x1f300 && codepoint <= 0x1faff) ||
+      (codepoint >= 0x1f1e6 && codepoint <= 0x1f1ff) ||
+      (codepoint >= 0x2600 && codepoint <= 0x27bf) ||
+      codepoint === 0x200d ||
+      codepoint === 0xfe0f ||
+      codepoint === 0x20e3
+    ) {
+      return true
+    }
+  }
+  return false
+}
 
 type UserMe = {
   user_id: string
@@ -161,6 +180,12 @@ export default function EditProfileScreen() {
     if (!trimmedUsername) {
       setUsernameError('Please enter a username.')
       hasError = true
+    } else if (trimmedUsername.length > MAX_USERNAME_LENGTH) {
+      setUsernameError(`Username must be ${MAX_USERNAME_LENGTH} characters or fewer.`)
+      hasError = true
+    } else if (containsEmoji(trimmedUsername)) {
+      setUsernameError('Username cannot contain emojis.')
+      hasError = true
     }
 
     if (!preferredCampus) {
@@ -169,10 +194,22 @@ export default function EditProfileScreen() {
     }
 
     if (trimmedPhone) {
-      const digits = trimmedPhone.replace(/\D/g, '')
-      if (digits.length < 10) {
-        setPhoneError('Please enter a valid phone number (at least 10 digits).')
+      let phoneFieldHasError = false
+      if (trimmedPhone.length > MAX_PHONE_NUMBER_LENGTH) {
+        setPhoneError(`Phone number must be ${MAX_PHONE_NUMBER_LENGTH} characters or fewer.`)
         hasError = true
+        phoneFieldHasError = true
+      } else if (containsEmoji(trimmedPhone)) {
+        setPhoneError('Phone number cannot contain emojis.')
+        hasError = true
+        phoneFieldHasError = true
+      }
+      if (!phoneFieldHasError) {
+        const digits = trimmedPhone.replace(/\D/g, '')
+        if (digits.length < 10) {
+          setPhoneError('Please enter a valid phone number (at least 10 digits).')
+          hasError = true
+        }
       }
     }
 
@@ -326,6 +363,7 @@ export default function EditProfileScreen() {
                 placeholderTextColor="#8C6B76"
                 style={[styles.input, usernameError && styles.inputError]}
                 autoCapitalize="none"
+                maxLength={MAX_USERNAME_LENGTH}
                 accessibilityLabel="Username"
               />
               {usernameError ? <Text style={styles.errorText}>{usernameError}</Text> : null}
@@ -363,6 +401,7 @@ export default function EditProfileScreen() {
                 placeholderTextColor="#8C6B76"
                 style={[styles.input, phoneError && styles.inputError]}
                 keyboardType="phone-pad"
+                maxLength={MAX_PHONE_NUMBER_LENGTH}
                 accessibilityLabel="Phone number"
               />
               {phoneError ? <Text style={styles.errorText}>{phoneError}</Text> : null}
