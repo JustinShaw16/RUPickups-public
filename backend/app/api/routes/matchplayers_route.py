@@ -1,13 +1,27 @@
-from fastapi import APIRouter, status
 from uuid import UUID
-from app.services.matchplayers_service import get_match_players, insert_match_players_to_db, delete_match_players_from_db
+
+from fastapi import APIRouter, status
+
 from app.models.matchplayers import MatchPlayerResponse, CreateMatchPlayersRequest
+from app.services.matchplayers_service import (
+    delete_match_players_from_db,
+    get_match_players,
+    get_match_players_by_match_id,
+    insert_match_players_to_db,
+)
 
 router = APIRouter()
+
 
 @router.get("/player_manifest", response_model=list[MatchPlayerResponse])
 def get_list_of_match_players():
     return get_match_players()
+
+
+@router.get("/by-match/{match_id}", response_model=list[MatchPlayerResponse])
+def get_match_players_for_match(match_id: UUID):
+    return get_match_players_by_match_id(str(match_id))
+
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def create_match_players(payload: CreateMatchPlayersRequest):
@@ -18,6 +32,7 @@ def create_match_players(payload: CreateMatchPlayersRequest):
     )
 
     return {"ok": True}
+
 
 @router.delete("/", status_code=status.HTTP_200_OK)
 def delete_match_players(match_id: UUID):

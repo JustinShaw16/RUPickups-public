@@ -1,7 +1,7 @@
+from datetime import datetime, timezone
 from uuid import UUID
 
 from app.db.supabase_client import get_supabase_client
-
 from app.repositories.matches_repository import player_ids_and_elos
 
 
@@ -34,8 +34,50 @@ def get_match_by_id(match_id: UUID) -> dict | None:
     return rows[0] if rows else None
 
 
-def create_match(lobby_id: UUID) -> dict:
+def get_active_match_by_lobby(lobby_id: UUID) -> dict | None:
     db = get_supabase_client()
+
+    response = (
+        db
+        .table("matches")
+        .select("*")
+        .eq("lobby_id", str(lobby_id))
+        .in_("status", ["scheduled", "in_progress"])
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+
+    rows = response.data or []
+    return rows[0] if rows else None
+
+
+def _get_lobby_host_user_id(lobby_id: UUID) -> str:
+    db = get_supabase_client()
+    response = (
+        db
+        .table("lobby")
+        .select("host_user_id")
+        .eq("lobby_id", str(lobby_id))
+        .limit(1)
+        .execute()
+    )
+    rows = response.data or []
+    if not rows:
+        raise RuntimeError("Lobby not found.")
+    return str(rows[0]["host_user_id"])
+
+
+def create_match(lobby_id: UUID, user_id: str) -> dict:
+    db = get_supabase_client()
+
+    host_user_id = _get_lobby_host_user_id(lobby_id)
+    if str(host_user_id) != str(user_id):
+        raise PermissionError("Only host can create a match.")
+
+    existing = get_active_match_by_lobby(lobby_id)
+    if existing:
+        return existing
 
     latest = (
         db
@@ -69,6 +111,81 @@ def create_match(lobby_id: UUID) -> dict:
 
     return created_rows[0]
 
+
+def start_match(match_id: UUID, user_id: str) -> dict:
+    db = get_supabase_client()
+
+    match = get_match_by_id(match_id)
+    if not match:
+        raise RuntimeError("Match not found.")
+
+    host_user_id = _get_lobby_host_user_id(UUID(str(match["lobby_id"])))
+    if str(host_user_id) != str(user_id):
+        raise PermissionError("Only host can start the match.")
+
+    current_status = str(match.get("status") or "").lower()
+    if current_status == "in_progress":
+        return match
+    if current_status == "completed":
+        raise RuntimeError("Match already completed.")
+
+    response = (
+        db
+        .table("matches")
+        .update(
+            {
+                "status": "in_progress",
+                "started_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+        .eq("match_id", str(match_id))
+        .execute()
+    )
+
+    rows = response.data or []
+    if not rows:
+        raise RuntimeError("Failed to start match.")
+
+    return rows[0]
+
+
+def complete_match(match_id: UUID, user_id: str, winner_team: str | None = None) -> dict:
+    db = get_supabase_client()
+
+    match = get_match_by_id(match_id)
+    if not match:
+        raise RuntimeError("Match not found.")
+
+    host_user_id = _get_lobby_host_user_id(UUID(str(match["lobby_id"])))
+    if str(host_user_id) != str(user_id):
+        raise PermissionError("Only host can complete the match.")
+
+    current_status = str(match.get("status") or "").lower()
+    if current_status == "completed":
+        return match
+
+    payload: dict[str, str] = {
+        "status": "completed",
+        "ended_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if winner_team:
+        payload["winner_team"] = winner_team
+
+    response = (
+        db
+        .table("matches")
+        .update(payload)
+        .eq("match_id", str(match_id))
+        .execute()
+    )
+
+    rows = response.data or []
+    if not rows:
+        raise RuntimeError("Failed to complete match.")
+
+    return rows[0]
+
+
 def create_balanced_teams(match_players: list[str], match_sport: str):
     list_of_player_ids_and_elos = player_ids_and_elos(match_players=match_players, match_sport=match_sport)
 
@@ -94,6 +211,5 @@ def create_balanced_teams(match_players: list[str], match_sport: str):
 
     print("PLAYERS INPUT:", match_players)
     print("RPC RESULT:", list_of_player_ids_and_elos)
-
 
     return team_a, team_b
