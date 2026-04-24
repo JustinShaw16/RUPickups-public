@@ -412,6 +412,28 @@ export default function LobbyDetailScreen() {
     }
   };
 
+  const confirmLeave = () => {
+    if (leaving) return;
+  
+    const participantCount = lobby?.participant_count ?? participants.length;
+    const isLastParticipant = participantCount <= 1;
+  
+    const message = isLastParticipant
+      ? 'You are the last participant. If you leave, this lobby will be terminated. Continue?'
+      : 'Are you sure you want to leave this lobby?';
+  
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(message);
+      if (confirmed) void handleLeave();
+      return;
+    }
+  
+    Alert.alert('Leave lobby', message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Leave', style: 'destructive', onPress: () => void handleLeave() },
+    ]);
+  };
+
   const handleCreateMatch = async () => {
     if (!id || creatingMatch) return;
   
@@ -864,7 +886,7 @@ export default function LobbyDetailScreen() {
                   {isParticipant ? (
                     <TouchableOpacity
                       style={[styles.leaveButton, leaving && styles.joinButtonDisabled]}
-                      onPress={handleLeave}
+                      onPress={confirmLeave}
                       disabled={leaving}
                       activeOpacity={0.9}
                     >
