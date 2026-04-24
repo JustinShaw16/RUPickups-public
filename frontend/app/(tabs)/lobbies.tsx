@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -70,6 +70,29 @@ function normalizeCampus(campus: string): string {
   return compact;
 }
 
+function locationMatchesSport(location: Location, sport: string): boolean {
+  const selected = sport.trim().toLowerCase();
+  if (!selected) return true;
+
+  const name = `${location.name} ${location.address}`.toLowerCase();
+
+  if (selected === 'basketball') {
+    return (
+      name.includes('basketball') ||
+      name.includes('main gym') ||
+      name.includes('annex') ||
+      name.includes('gym')
+    );
+  }
+  if (selected === 'volleyball') return name.includes('volleyball');
+  if (selected === 'pickleball') return name.includes('pickleball') || name.includes('pickle');
+  if (selected === 'tennis') return name.includes('tennis');
+  if (selected === 'badminton') return name.includes('badminton');
+  if (selected === 'soccer') return name.includes('soccer') || name.includes('field');
+
+  return name.includes(selected);
+}
+
 const SPORT_OPTIONS = [
   'Basketball',
   'Volleyball',
@@ -138,8 +161,8 @@ export default function LobbiesScreen() {
   const [showPicker, setShowPicker] = useState(false);
   const [androidPickerStep, setAndroidPickerStep] = useState<'date' | 'time' | null>(null);
   const [locationPickerOpen, setLocationPickerOpen] = useState(false);
-  const [sportFilter, setSportFilter] = useState<string | 'ALL'>('ALL');
-  const [campusFilter, setCampusFilter] = useState<string | 'ALL'>('ALL');
+  const [sportFilters, setSportFilters] = useState<string[]>([]);
+  const [campusFilters, setCampusFilters] = useState<string[]>([]);
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('any');
   const [openFilter, setOpenFilter] = useState<'sport' | 'campus' | 'time' | null>(null);
   const [page, setPage] = useState(1);
@@ -319,19 +342,45 @@ export default function LobbiesScreen() {
     return lobby.campus?.trim() ?? '';
   };
 
+  const createLocations = useMemo(
+    () => locations.filter((loc) => locationMatchesSport(loc, sport)),
+    [locations, sport],
+  );
+
   const selectedLocation = locationId
-    ? locations.find((loc) => loc.location_id === locationId)
+    ? createLocations.find((loc) => loc.location_id === locationId) ??
+      locations.find((loc) => loc.location_id === locationId) ??
+      null
     : null;
+
+  useEffect(() => {
+    if (!locationId) return;
+    const stillValid = createLocations.some((loc) => loc.location_id === locationId);
+    if (!stillValid) setLocationId(null);
+  }, [locationId, createLocations]);
+
+  const toggleSportFilter = useCallback((value: string) => {
+    setSportFilters((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
+    );
+  }, []);
+
+  const toggleCampusFilter = useCallback((value: string) => {
+    setCampusFilters((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
+    );
+  }, []);
 
   const filteredLobbies = useMemo(() => {
     const now = new Date();
     return lobbies.filter((lobby) => {
-      if (sportFilter !== 'ALL' && lobby.sport !== sportFilter) return false;
-      if (
-        campusFilter !== 'ALL' &&
-        normalizeCampus(campusForLobby(lobby)) !== normalizeCampus(campusFilter)
-      ) {
-        return false;
+      if (sportFilters.length > 0 && !sportFilters.includes(lobby.sport)) return false;
+      if (campusFilters.length > 0) {
+        const lobbyCampus = normalizeCampus(campusForLobby(lobby));
+        const campusMatch = campusFilters.some(
+          (selectedCampus) => normalizeCampus(selectedCampus) === lobbyCampus,
+        );
+        if (!campusMatch) return false;
       }
       if (timeFilter === 'upcoming') {
         return new Date(lobby.scheduled_start_time).getTime() >= now.getTime();
@@ -341,7 +390,20 @@ export default function LobbiesScreen() {
       }
       return true;
     });
-  }, [lobbies, locations, sportFilter, campusFilter, timeFilter]);
+  }, [lobbies, locations, sportFilters, campusFilters, timeFilter]);
+
+  const sportFilterLabel =
+    sportFilters.length === 0
+      ? 'Any'
+      : sportFilters.length === 1
+        ? sportFilters[0]
+        : `${sportFilters.length} selected`;
+  const campusFilterLabel =
+    campusFilters.length === 0
+      ? 'Any'
+      : campusFilters.length === 1
+        ? campusFilters[0]
+        : `${campusFilters.length} selected`;
 
   const totalPages = Math.max(1, Math.ceil(filteredLobbies.length / LOBBIES_PAGE_SIZE));
   const paginatedLobbies = useMemo(() => {
@@ -351,7 +413,7 @@ export default function LobbiesScreen() {
 
   useEffect(() => {
     setPage(1);
-  }, [sportFilter, campusFilter, timeFilter]);
+  }, [sportFilters, campusFilters, timeFilter]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -509,8 +571,8 @@ export default function LobbiesScreen() {
             <TouchableOpacity
               style={styles.addFilterButton}
               onPress={() => {
-                setSportFilter('ALL');
-                setCampusFilter('ALL');
+                setSportFilters([]);
+                setCampusFilters([]);
                 setTimeFilter('any');
                 setOpenFilter(null);
               }}
@@ -527,7 +589,7 @@ export default function LobbiesScreen() {
               activeOpacity={0.85}
             >
               <Text style={[styles.filterChipText, openFilter === 'sport' && styles.filterChipTextActive]}>
-                Sport: {sportFilter === 'ALL' ? 'Any' : sportFilter}
+                Sport: {sportFilterLabel}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -538,7 +600,7 @@ export default function LobbiesScreen() {
               <Text
                 style={[styles.filterChipText, openFilter === 'campus' && styles.filterChipTextActive]}
               >
-                Campus: {campusFilter === 'ALL' ? 'Any' : campusFilter}
+                Campus: {campusFilterLabel}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -568,15 +630,15 @@ export default function LobbiesScreen() {
                     <TouchableOpacity
                       style={[
                         styles.filterOption,
-                        sportFilter === 'ALL' && styles.filterOptionSelected,
+                        sportFilters.length === 0 && styles.filterOptionSelected,
                       ]}
-                      onPress={() => setSportFilter('ALL')}
+                      onPress={() => setSportFilters([])}
                       activeOpacity={0.8}
                     >
                       <Text
                         style={[
                           styles.filterOptionText,
-                          sportFilter === 'ALL' && styles.filterOptionTextSelected,
+                          sportFilters.length === 0 && styles.filterOptionTextSelected,
                         ]}
                       >
                         Any sport
@@ -587,15 +649,15 @@ export default function LobbiesScreen() {
                         key={option}
                         style={[
                           styles.filterOption,
-                          sportFilter === option && styles.filterOptionSelected,
+                          sportFilters.includes(option) && styles.filterOptionSelected,
                         ]}
-                        onPress={() => setSportFilter(option)}
+                        onPress={() => toggleSportFilter(option)}
                         activeOpacity={0.8}
                       >
                         <Text
                           style={[
                             styles.filterOptionText,
-                            sportFilter === option && styles.filterOptionTextSelected,
+                            sportFilters.includes(option) && styles.filterOptionTextSelected,
                           ]}
                         >
                           {option}
@@ -608,15 +670,15 @@ export default function LobbiesScreen() {
                     <TouchableOpacity
                       style={[
                         styles.filterOption,
-                        campusFilter === 'ALL' && styles.filterOptionSelected,
+                        campusFilters.length === 0 && styles.filterOptionSelected,
                       ]}
-                      onPress={() => setCampusFilter('ALL')}
+                      onPress={() => setCampusFilters([])}
                       activeOpacity={0.8}
                     >
                       <Text
                         style={[
                           styles.filterOptionText,
-                          campusFilter === 'ALL' && styles.filterOptionTextSelected,
+                          campusFilters.length === 0 && styles.filterOptionTextSelected,
                         ]}
                       >
                         Any campus
@@ -627,15 +689,15 @@ export default function LobbiesScreen() {
                         key={campus}
                         style={[
                           styles.filterOption,
-                          campusFilter === campus && styles.filterOptionSelected,
+                          campusFilters.includes(campus) && styles.filterOptionSelected,
                         ]}
-                        onPress={() => setCampusFilter(campus)}
+                        onPress={() => toggleCampusFilter(campus)}
                         activeOpacity={0.8}
                       >
                         <Text
                           style={[
                             styles.filterOptionText,
-                            campusFilter === campus && styles.filterOptionTextSelected,
+                            campusFilters.includes(campus) && styles.filterOptionTextSelected,
                           ]}
                         >
                           {campus}
@@ -911,9 +973,11 @@ export default function LobbiesScreen() {
                   <Text style={styles.locationSelectPlaceholder}>Select location…</Text>
                 )}
               </TouchableOpacity>
-              {locations.length === 0 ? (
+              {createLocations.length === 0 ? (
                 <Text style={styles.mutedTextSmall}>
-                  No locations available. Please add locations in the database.
+                  {sport.trim()
+                    ? `No ${sport} courts found.`
+                    : 'No locations available. Please add locations in the database.'}
                 </Text>
               ) : null}
 
@@ -926,13 +990,15 @@ export default function LobbiesScreen() {
                 <View style={styles.locationPickerBackdrop}>
                   <Pressable style={StyleSheet.absoluteFill} onPress={() => setLocationPickerOpen(false)} />
                   <View style={styles.locationPickerCard}>
-                    <Text style={styles.locationPickerTitle}>Select location</Text>
+                    <Text style={styles.locationPickerTitle}>
+                      {sport.trim() ? `Select ${sport} court` : 'Select location'}
+                    </Text>
                     <ScrollView
                       style={styles.locationPickerScroll}
                       contentContainerStyle={styles.locationPickerScrollContent}
                       keyboardShouldPersistTaps="handled"
                     >
-                      {locations.map((loc) => {
+                      {createLocations.map((loc) => {
                         const selected = locationId === loc.location_id;
                         return (
                           <TouchableOpacity
