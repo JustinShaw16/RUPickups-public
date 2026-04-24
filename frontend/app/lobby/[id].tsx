@@ -106,6 +106,11 @@ type LeaveLobbyResult = {
   new_host_user_id?: string | null;
 };
 
+type ActiveMatchResponse = {
+  match_id: string;
+  status: string;
+};
+
 const RUTGERS_RED = '#CC0033';
 const DARK_NAVY = '#111827';
 const LIGHT_GRAY = '#F9FAFB';
@@ -143,6 +148,7 @@ export default function LobbyDetailScreen() {
   const [showEditPicker, setShowEditPicker] = useState(false);
   const [editAndroidPickerStep, setEditAndroidPickerStep] = useState<'date' | 'time'>('date');
   const [creatingMatch, setCreatingMatch] = useState(false);
+  const [redirectingToMatch, setRedirectingToMatch] = useState(false);
   const [joinPasswordModalOpen, setJoinPasswordModalOpen] = useState(false);
   const [joinPassword, setJoinPassword] = useState('');
   const [joinUnlockBusy, setJoinUnlockBusy] = useState(false);
@@ -247,6 +253,18 @@ export default function LobbyDetailScreen() {
     void loadCurrentUser();
   }, [id, loadLobby, loadParticipants, loadLocations, loadCurrentUser]);
 
+  const fetchActiveMatch = useCallback(async (): Promise<ActiveMatchResponse | null> => {
+    if (!id) return null;
+    try {
+      const res = await authedFetchForLobby(id, `/matches/lobby/${id}/active`);
+      if (res.status === 404) return null;
+      if (!res.ok) return null;
+      return (await res.json()) as ActiveMatchResponse;
+    } catch {
+      return null;
+    }
+  }, [id]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadAll();
@@ -256,6 +274,31 @@ export default function LobbyDetailScreen() {
   useEffect(() => {
     void loadAll();
   }, [loadAll]);
+
+  useEffect(() => {
+    if (!id) return;
+
+    let cancelled = false;
+
+    const checkAndNavigate = async () => {
+      if (cancelled || redirectingToMatch) return;
+      const active = await fetchActiveMatch();
+      if (!active?.match_id || cancelled) return;
+
+      setRedirectingToMatch(true);
+      router.replace({ pathname: '/match/[id]', params: { id: active.match_id } });
+    };
+
+    void checkAndNavigate();
+    const interval = setInterval(() => {
+      void checkAndNavigate();
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [id, fetchActiveMatch, redirectingToMatch, router]);
 
   const readErrorDetail = async (res: Response): Promise<string> => {
     const raw = await res.text().catch(() => '');
@@ -451,7 +494,8 @@ export default function LobbyDetailScreen() {
       }
   
       const created = (await res.json()) as { match_id: string };
-      router.push({ pathname: '/match/[id]', params: { id: created.match_id } });
+      setRedirectingToMatch(true);
+      router.replace({ pathname: '/match/[id]', params: { id: created.match_id } });
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Failed to create match.';
       if (Platform.OS === 'web') {
@@ -919,13 +963,13 @@ export default function LobbyDetailScreen() {
                 {isHost ? (
                   <View style={styles.section}>
                     <TouchableOpacity
-                      style={[styles.createMatchButton, creatingMatch && styles.joinButtonDisabled]}
+                      style={[styles.createMatchButton, (creatingMatch || redirectingToMatch) && styles.joinButtonDisabled]}
                       onPress={() => void handleCreateMatch()}
-                      disabled={creatingMatch}
+                      disabled={creatingMatch || redirectingToMatch}
                       activeOpacity={0.9}
                     >
                       <Text style={styles.createMatchButtonText}>
-                        {creatingMatch ? 'Starting match…' : 'Start match'}
+                        {creatingMatch || redirectingToMatch ? 'Starting match…' : 'Start match'}
                       </Text>
                     </TouchableOpacity>
                   </View>
