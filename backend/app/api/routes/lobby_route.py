@@ -131,6 +131,8 @@ def update_lobby(
 ):
     try:
         result = lobby_service.update_lobby(lobby_id=lobby_id, user_id=user_id, payload=payload)
+    except lobby_service.LobbyConflictError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     if not result:
@@ -154,5 +156,7 @@ def delete_lobby(lobby_id: UUID, user_id: str = Depends(require_user_id)):
 def create_lobby(payload: LobbyCreate, user_id: str = Depends(require_user_id)):
     try:
         return lobby_service.create_lobby(user_id=user_id, payload=payload)
+    except lobby_service.LobbyConflictError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e

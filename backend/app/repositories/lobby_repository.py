@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from app.core.lobby_unlock import hash_lobby_password
@@ -52,6 +53,89 @@ def _normalize_uuid(s: str) -> str:
         return str(s).strip()
 
 
+LOBBY_OVERLAP_WINDOW_MINUTES = 90
+
+
+def _normalize_lobby_name(name: str) -> str:
+    # trim + collapse internal whitespace + casefold
+    return " ".join((name or "").split()).strip().casefold()
+
+
+def _coerce_datetime(value: object) -> datetime:
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        text = str(value or "").strip()
+        if text.endswith("Z"):
+            text = f"{text[:-1]}+00:00"
+        dt = datetime.fromisoformat(text)
+
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def lobby_name_exists(*, lobby_name: str, exclude_lobby_id: UUID | None = None) -> bool:
+    db = get_supabase_client()
+    rows = db.table("lobby").select("lobby_id, lobby_name").execute().data or []
+    target = _normalize_lobby_name(lobby_name)
+
+    for row in rows:
+        rid = str(row.get("lobby_id") or "")
+        if exclude_lobby_id is not None and rid == str(exclude_lobby_id):
+            continue
+        existing = _normalize_lobby_name(str(row.get("lobby_name") or ""))
+        if existing == target:
+            return True
+    return False
+
+
+def location_time_overlap_exists(
+    *,
+    location_id: UUID,
+    scheduled_start_time: datetime,
+    exclude_lobby_id: UUID | None = None,
+) -> bool:
+    db = get_supabase_client()
+    rows = (
+        db.table("lobby")
+        .select("lobby_id, scheduled_start_time, status")
+        .eq("location_id", str(location_id))
+        .execute()
+        .data
+        or []
+    )
+
+    target_start = _coerce_datetime(scheduled_start_time)
+    target_end = target_start + timedelta(minutes=LOBBY_OVERLAP_WINDOW_MINUTES)
+
+    for row in rows:
+        rid = str(row.get("lobby_id") or "")
+        if exclude_lobby_id is not None and rid == str(exclude_lobby_id):
+            continue
+
+        status = str(row.get("status") or "").lower()
+        if status in {"cancelled", "completed"}:
+            continue
+
+        raw_start = row.get("scheduled_start_time")
+        if not raw_start:
+            continue
+
+        try:
+            existing_start = _coerce_datetime(raw_start)
+        except ValueError:
+            continue
+
+        existing_end = existing_start + timedelta(minutes=LOBBY_OVERLAP_WINDOW_MINUTES)
+
+        # overlap rule: A starts before B ends and A ends after B starts
+        if target_start < existing_end and target_end > existing_start:
+            return True
+
+    return False
+
+
 def is_user_in_lobby(lobby_id: UUID, user_id: str) -> bool:
     db = get_supabase_client()
     uid = _normalize_uuid(user_id)
@@ -103,7 +187,7 @@ def get_upcoming_lobbies_for_user(user_id: str):
       regardless of whether the scheduled_start_time is in the past
       or future.
 
-    1. Match current user's user_id to player_id in lobby_participants → get lobby_ids.
+    1. Match current user's user_id to player_id in lobby_participants -> get lobby_ids.
     2. Fetch full lobby rows for those lobby_ids.
     3. Filter to rows where status == "open" and return.
     """

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import UUID
 
 from app.core.lobby_unlock import (
@@ -9,6 +10,19 @@ from app.core.lobby_unlock import (
 )
 from app.models.lobby import LobbyCreate, LobbyResponse, LobbyUpdate
 from app.repositories import lobby_repository, playerstats_repository
+
+
+class LobbyConflictError(ValueError):
+    pass
+
+
+def _parse_datetime(value: object) -> datetime:
+    if isinstance(value, datetime):
+        return value
+    text = str(value or "").strip()
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    return datetime.fromisoformat(text)
 
 
 def _user_sport_elo(*, user_id: str, sport: str) -> int:
@@ -127,10 +141,29 @@ def get_lobby_for_viewer(
 
 
 def create_lobby(*, user_id: str, payload: LobbyCreate) -> LobbyResponse:
+    lobby_name = payload.lobby_name.strip()
+    if not lobby_name:
+        raise ValueError("Lobby name is required")
+
     host_elo = _user_sport_elo(user_id=user_id, sport=payload.sport)
     if int(payload.min_elo) > host_elo:
         raise ValueError("Minimum ELO cannot be higher than your current ELO")
-    row = lobby_repository.create_lobby(host_user_id=user_id, payload=payload)
+
+    if lobby_repository.lobby_name_exists(lobby_name=lobby_name):
+        raise LobbyConflictError("A lobby with this name already exists.")
+
+    if (
+        payload.location_id is not None
+        and lobby_repository.location_time_overlap_exists(
+            location_id=payload.location_id,
+            scheduled_start_time=payload.scheduled_start_time,
+        )
+    ):
+        raise LobbyConflictError("This location is already booked for an overlapping time window.")
+
+    sanitized_payload = payload.model_copy(update={"lobby_name": lobby_name})
+
+    row = lobby_repository.create_lobby(host_user_id=user_id, payload=sanitized_payload)
     lid = UUID(str(row["lobby_id"]))
     return _to_lobby_response(
         row,
@@ -145,6 +178,7 @@ def update_lobby(*, lobby_id: UUID, user_id: str, payload: LobbyUpdate) -> Lobby
     lobby = lobby_repository.get_lobby_by_id(lobby_id)
     if not lobby or str(lobby.get("host_user_id")) != user_id:
         return None
+
     if payload.min_elo is not None:
         sport = payload.sport if payload.sport is not None else str(lobby.get("sport") or "")
         host_elo = _user_sport_elo(user_id=user_id, sport=sport)
@@ -172,7 +206,33 @@ def update_lobby(*, lobby_id: UUID, user_id: str, payload: LobbyUpdate) -> Lobby
                     "Please set a password of at least 4 characters."
                 )
 
-    updated = lobby_repository.update_lobby(lobby_id=lobby_id, payload=payload)
+    next_name = payload.lobby_name if payload.lobby_name is not None else str(lobby.get("lobby_name") or "")
+    next_name = next_name.strip()
+    if not next_name:
+        raise ValueError("Lobby name is required")
+
+    if lobby_repository.lobby_name_exists(
+        lobby_name=next_name,
+        exclude_lobby_id=lobby_id,
+    ):
+        raise LobbyConflictError("A lobby with this name already exists.")
+
+    next_location = payload.location_id if payload.location_id is not None else lobby.get("location_id")
+    next_start = (
+        payload.scheduled_start_time
+        if payload.scheduled_start_time is not None
+        else _parse_datetime(lobby.get("scheduled_start_time"))
+    )
+
+    if next_location is not None and lobby_repository.location_time_overlap_exists(
+        location_id=UUID(str(next_location)),
+        scheduled_start_time=next_start,
+        exclude_lobby_id=lobby_id,
+    ):
+        raise LobbyConflictError("This location is already booked for an overlapping time window.")
+
+    normalized_payload = payload.model_copy(update={"lobby_name": next_name})
+    updated = lobby_repository.update_lobby(lobby_id=lobby_id, payload=normalized_payload)
     if not updated:
         return None
     member_ids = lobby_repository.get_lobby_ids_for_participant(user_id)
