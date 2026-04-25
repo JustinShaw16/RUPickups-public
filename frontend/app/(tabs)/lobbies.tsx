@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Image,
   Modal,
-  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -14,10 +13,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import DateTimePicker, {
-  DateTimePickerEvent,
-} from '@react-native-community/datetimepicker';
-
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -103,6 +98,9 @@ const SPORT_OPTIONS = [
 ] as const;
 type TimeFilter = 'any' | 'upcoming' | 'past';
 const LOBBIES_PAGE_SIZE = 8;
+const SLOT_INTERVAL_MINUTES = 30;
+const SLOT_START_HOUR = 8;
+const SLOT_END_HOUR = 23;
 
 const CAMPUS_IMAGES = {
   collegeave: require('../photos/CollegeAve.jpg'),
@@ -130,6 +128,69 @@ function sportIconFor(sport: string): keyof typeof MaterialIcons.glyphMap {
   return 'sports';
 }
 
+
+function startOfDay(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function dateKey(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function slotKey(date: Date): string {
+  return `${dateKey(date)}-${String(date.getHours()).padStart(2, '0')}:${String(
+    date.getMinutes(),
+  ).padStart(2, '0')}`;
+}
+
+function formatDayChip(date: Date): string {
+  const today = startOfDay(new Date()).getTime();
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const target = startOfDay(date).getTime();
+  const label = date.toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+  if (target === today) return `Today · ${label}`;
+  if (target === startOfDay(tomorrow).getTime()) return `Tomorrow · ${label}`;
+  return label;
+}
+
+function formatSlotTime(date: Date): string {
+  return date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+
+function formatReservationSummary(date: Date): string {
+  return date.toLocaleString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function buildTimeSlotsForDay(day: Date): Date[] {
+  const slots: Date[] = [];
+  const current = new Date(day);
+  current.setHours(SLOT_START_HOUR, 0, 0, 0);
+  const end = new Date(day);
+  end.setHours(SLOT_END_HOUR, 0, 0, 0);
+  while (current < end) {
+    slots.push(new Date(current));
+    current.setMinutes(current.getMinutes() + SLOT_INTERVAL_MINUTES);
+  }
+  return slots;
+}
+
+
 export default function LobbiesScreen() {
   const router = useRouter();
   const [lobbies, setLobbies] = useState<Lobby[]>([]);
@@ -153,13 +214,8 @@ export default function LobbiesScreen() {
   const [lobbyPasswordConfirm, setLobbyPasswordConfirm] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
-  const [scheduledAt, setScheduledAt] = useState<Date>(() => {
-    const d = new Date();
-    d.setMinutes(d.getMinutes() + 30);
-    return d;
-  });
-  const [showPicker, setShowPicker] = useState(false);
-  const [androidPickerStep, setAndroidPickerStep] = useState<'date' | 'time' | null>(null);
+  const [selectedDay, setSelectedDay] = useState<Date>(() => startOfDay(new Date()));
+  const [selectedSlot, setSelectedSlot] = useState<Date | null>(null);
   const [locationPickerOpen, setLocationPickerOpen] = useState(false);
   const [sportFilters, setSportFilters] = useState<string[]>([]);
   const [campusFilters, setCampusFilters] = useState<string[]>([]);
@@ -265,13 +321,10 @@ export default function LobbiesScreen() {
     setLobbyPasswordConfirm('');
     setShowPassword(false);
     setShowPasswordConfirm(false);
-    const d = new Date();
-    d.setMinutes(d.getMinutes() + 30);
-    setScheduledAt(d);
+    setSelectedDay(startOfDay(new Date()));
+    setSelectedSlot(null);
     setCreateError(null);
     setLocationPickerOpen(false);
-    setShowPicker(false);
-    setAndroidPickerStep(null);
   };
 
   const openCreate = () => {
@@ -282,56 +335,6 @@ export default function LobbiesScreen() {
   const closeCreate = () => {
     setCreateOpen(false);
   };
-
-  const handleDateChange = (event: DateTimePickerEvent, date?: Date) => {
-    if (Platform.OS === 'android') {
-      if (event.type === 'dismissed') {
-        setShowPicker(false);
-        setAndroidPickerStep(null);
-        return;
-      }
-      if (!date || Number.isNaN(date.getTime())) return;
-      if (androidPickerStep === 'date') {
-        setScheduledAt((prev) => {
-          const next = new Date(prev);
-          next.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
-          return next;
-        });
-        setAndroidPickerStep('time');
-        return;
-      }
-      if (androidPickerStep === 'time') {
-        setScheduledAt((prev) => {
-          const next = new Date(prev);
-          next.setHours(date.getHours(), date.getMinutes(), 0, 0);
-          return next;
-        });
-        setShowPicker(false);
-        setAndroidPickerStep(null);
-      }
-      return;
-    }
-
-    if (date && !Number.isNaN(date.getTime())) {
-      setScheduledAt(date);
-    }
-  };
-
-  const openDatePicker = () => {
-    setShowPicker(true);
-    if (Platform.OS === 'android') {
-      setAndroidPickerStep('date');
-    }
-  };
-
-  const formattedDate = useMemo(
-    () =>
-      scheduledAt.toLocaleString(undefined, {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      }),
-    [scheduledAt],
-  );
 
   const locationForLobby = (lobby: Lobby): Location | undefined =>
     locations.find((loc) => loc.location_id === lobby.location_id);
@@ -353,10 +356,41 @@ export default function LobbiesScreen() {
       null
     : null;
 
+  const reservationDays = useMemo(
+    () =>
+      Array.from({ length: 7 }, (_, i) => {
+        const d = startOfDay(new Date());
+        d.setDate(d.getDate() + i);
+        return d;
+      }),
+    [],
+  );
+
+  const availableTimeSlots = useMemo(() => buildTimeSlotsForDay(selectedDay), [selectedDay]);
+
+  const bookedSlotKeys = useMemo(() => {
+    const keys = new Set<string>();
+    if (!locationId) return keys;
+
+    for (const lobby of lobbies) {
+      if (lobby.location_id !== locationId) continue;
+      const status = lobby.status.toLowerCase();
+      if (status === 'cancelled' || status === 'completed') continue;
+
+      const start = new Date(lobby.scheduled_start_time);
+      if (!Number.isNaN(start.getTime())) keys.add(slotKey(start));
+    }
+
+    return keys;
+  }, [lobbies, locationId]);
+
   useEffect(() => {
     if (!locationId) return;
     const stillValid = createLocations.some((loc) => loc.location_id === locationId);
-    if (!stillValid) setLocationId(null);
+    if (!stillValid) {
+      setLocationId(null);
+      setSelectedSlot(null);
+    }
   }, [locationId, createLocations]);
 
   const toggleSportFilter = useCallback((value: string) => {
@@ -470,9 +504,18 @@ export default function LobbiesScreen() {
       }
     }
 
-    const now = new Date();
-    if (scheduledAt.getTime() <= now.getTime()) {
-      setCreateError('Start time must be in the future.');
+    if (!selectedSlot) {
+      setCreateError('Please select an available reservation time slot.');
+      return;
+    }
+    if (selectedSlot.getTime() <= Date.now()) {
+      setCreateError('Reservation time must be in the future.');
+      return;
+    }
+    if (bookedSlotKeys.has(slotKey(selectedSlot))) {
+      setCreateError(
+        'That court is already booked for this time slot. Please choose another slot.',
+      );
       return;
     }
 
@@ -501,7 +544,7 @@ export default function LobbiesScreen() {
         is_public: isPublic,
         max_players: max,
         min_elo: minElo,
-        scheduled_start_time: scheduledAt.toISOString(),
+        scheduled_start_time: selectedSlot.toISOString(),
       };
       if (!isPublic) {
         body.lobby_password = lobbyPassword.trim();
@@ -944,7 +987,11 @@ export default function LobbiesScreen() {
                     <TouchableOpacity
                       key={option}
                       style={[styles.pill, selected && styles.pillSelected]}
-                      onPress={() => setSport(option)}
+                      onPress={() => {
+                        setSport(option);
+                        setLocationId(null);
+                        setSelectedSlot(null);
+                      }}
                       activeOpacity={0.9}
                     >
                       <Text style={[styles.pillText, selected && styles.pillTextSelected]}>
@@ -1006,6 +1053,7 @@ export default function LobbiesScreen() {
                             style={[styles.locationPickerRow, selected && styles.locationPickerRowSelected]}
                             onPress={() => {
                               setLocationId(loc.location_id);
+                              setSelectedSlot(null);
                               setLocationPickerOpen(false);
                             }}
                             activeOpacity={0.9}
@@ -1030,85 +1078,128 @@ export default function LobbiesScreen() {
                 </View>
               </Modal>
 
-              <Text style={styles.label}>Start time</Text>
-              {Platform.OS === 'web' ? (
-                <View style={styles.dateButton}>
-                  <input
-                    type="datetime-local"
-                    style={{
-                      width: '100%',
-                      border: 'none',
-                      backgroundColor: 'transparent',
-                      fontSize: 14,
-                      color: DARK_NAVY,
-                      outline: 'none',
-                    }}
-                    value={(() => {
-                      const pad = (n: number) => n.toString().padStart(2, '0');
-                      const y = scheduledAt.getFullYear();
-                      const m = pad(scheduledAt.getMonth() + 1);
-                      const d = pad(scheduledAt.getDate());
-                      const h = pad(scheduledAt.getHours());
-                      const min = pad(scheduledAt.getMinutes());
-                      return `${y}-${m}-${d}T${h}:${min}`;
-                    })()}
-                    onChange={(e: any) => {
-                      const v = e.target?.value as string | undefined;
-                      if (!v) return;
-                      const next = new Date(v);
-                      if (!Number.isNaN(next.getTime())) {
-                        setScheduledAt(next);
-                      }
-                    }}
-                    min={(() => {
-                      const now = new Date();
-                      const pad = (n: number) => n.toString().padStart(2, '0');
-                      const y = now.getFullYear();
-                      const m = pad(now.getMonth() + 1);
-                      const d = pad(now.getDate());
-                      const h = pad(now.getHours());
-                      const min = pad(now.getMinutes());
-                      return `${y}-${m}-${d}T${h}:${min}`;
-                    })()}
-                  />
+              <Text style={styles.label}>Reserve time slot</Text>
+              <Text style={styles.mutedTextSmall}>
+                Choose a date, then select an open 30-minute slot. Booked slots are blocked for
+                the selected court.
+              </Text>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.dayScroller}
+              >
+                {reservationDays.map((day) => {
+                  const selected = dateKey(day) === dateKey(selectedDay);
+                  return (
+                    <TouchableOpacity
+                      key={dateKey(day)}
+                      style={[styles.dayCard, selected && styles.dayCardSelected]}
+                      onPress={() => {
+                        setSelectedDay(day);
+                        setSelectedSlot(null);
+                      }}
+                      activeOpacity={0.9}
+                    >
+                      <Text style={[styles.dayCardText, selected && styles.dayCardTextSelected]}>
+                        {formatDayChip(day)}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              <View style={styles.slotLegendRow}>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, styles.legendDotOpen]} />
+                  <Text style={styles.legendText}>Open</Text>
                 </View>
-              ) : (
-                <>
-                  <TouchableOpacity
-                    style={styles.dateButton}
-                    onPress={openDatePicker}
-                    activeOpacity={0.9}
-                  >
-                    <Text style={styles.dateButtonText}>{formattedDate}</Text>
-                  </TouchableOpacity>
-                  {showPicker && Platform.OS === 'ios' && (
-                    <DateTimePicker
-                      value={scheduledAt}
-                      mode="datetime"
-                      minimumDate={new Date()}
-                      onChange={handleDateChange}
-                      display="spinner"
-                    />
-                  )}
-                  {showPicker && Platform.OS === 'android' && androidPickerStep === 'date' && (
-                    <DateTimePicker
-                      value={scheduledAt}
-                      mode="date"
-                      minimumDate={new Date()}
-                      onChange={handleDateChange}
-                      display="default"
-                    />
-                  )}
-                  {showPicker && Platform.OS === 'android' && androidPickerStep === 'time' && (
-                    <DateTimePicker
-                      value={scheduledAt}
-                      mode="time"
-                      onChange={handleDateChange}
-                      display="default"
-                    />
-                  )}
-                </>
-              )}
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, styles.legendDotSelected]} />
+                  <Text style={styles.legendText}>Selected</Text>
+                </View>
+                <View style={styles.legendItem}>
+                  <View style={[styles.legendDot, styles.legendDotBooked]} />
+                  <Text style={styles.legendText}>Booked</Text>
+                </View>
+              </View>
+
+              <View style={styles.slotListCard}>
+                {!locationId ? (
+                  <Text style={styles.slotHelpText}>
+                    Select a location first to view available time slots.
+                  </Text>
+                ) : (
+                  availableTimeSlots.map((slotDate) => {
+                    const key = slotKey(slotDate);
+                    const isPast = slotDate.getTime() <= Date.now();
+                    const isBooked = bookedSlotKeys.has(key);
+                    const isSelected = selectedSlot ? slotKey(selectedSlot) === key : false;
+                    const disabled = isPast || isBooked;
+
+                    return (
+                      <TouchableOpacity
+                        key={key}
+                        style={[
+                          styles.timeSlotRow,
+                          isSelected && styles.timeSlotRowSelected,
+                          disabled && styles.timeSlotRowDisabled,
+                        ]}
+                        disabled={disabled}
+                        onPress={() => setSelectedSlot(slotDate)}
+                        activeOpacity={0.9}
+                      >
+                        <View>
+                          <Text
+                            style={[
+                              styles.timeSlotTime,
+                              isSelected && styles.timeSlotTimeSelected,
+                              disabled && styles.timeSlotTimeDisabled,
+                            ]}
+                          >
+                            {formatSlotTime(slotDate)}
+                          </Text>
+                          <Text
+                            style={[
+                              styles.timeSlotSubtext,
+                              isSelected && styles.timeSlotSubtextSelected,
+                            ]}
+                          >
+                            30 minute reservation
+                          </Text>
+                        </View>
+                        <View
+                          style={[
+                            styles.timeSlotStatusPill,
+                            isSelected && styles.timeSlotStatusSelected,
+                            disabled && styles.timeSlotStatusDisabled,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.timeSlotStatusText,
+                              isSelected && styles.timeSlotStatusTextSelected,
+                              disabled && styles.timeSlotStatusTextDisabled,
+                            ]}
+                          >
+                            {isBooked ? 'Booked' : isPast ? 'Past' : isSelected ? 'Selected' : 'Open'}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })
+                )}
+              </View>
+
+              {selectedSlot && selectedLocation ? (
+                <View style={styles.reservationSummaryCard}>
+                  <Text style={styles.reservationSummaryLabel}>Selected reservation</Text>
+                  <Text style={styles.reservationSummaryTitle}>{selectedLocation.name}</Text>
+                  <Text style={styles.reservationSummaryText}>
+                    {formatReservationSummary(selectedSlot)}
+                  </Text>
+                </View>
+              ) : null}
 
               <Text style={styles.label}>Max players</Text>
               <TextInput
@@ -1827,17 +1918,162 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
   },
-  dateButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
+  dayScroller: {
+    paddingVertical: 8,
+    gap: 8,
+  },
+  dayCard: {
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: BORDER_GRAY,
     backgroundColor: '#F9FAFB',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginRight: 8,
   },
-  dateButtonText: {
-    fontSize: 14,
+  dayCardSelected: {
+    borderColor: RUTGERS_RED,
+    backgroundColor: 'rgba(204, 0, 51, 0.10)',
+  },
+  dayCardText: {
+    fontSize: 13,
+    fontWeight: '700',
     color: DARK_NAVY,
+  },
+  dayCardTextSelected: {
+    color: RUTGERS_RED,
+  },
+  slotLegendRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 10,
+    marginBottom: 8,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  legendDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 999,
+  },
+  legendDotOpen: {
+    backgroundColor: '#22C55E',
+  },
+  legendDotSelected: {
+    backgroundColor: RUTGERS_RED,
+  },
+  legendDotBooked: {
+    backgroundColor: '#CBD5E1',
+  },
+  legendText: {
+    fontSize: 12,
+    color: MUTED_TEXT,
+    fontWeight: '600',
+  },
+  slotListCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER_GRAY,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+    marginTop: 4,
+  },
+  slotHelpText: {
+    paddingHorizontal: 14,
+    paddingVertical: 16,
+    color: MUTED_TEXT,
+    fontSize: 13,
+  },
+  timeSlotRow: {
+    minHeight: 58,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER_GRAY,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+  },
+  timeSlotRowSelected: {
+    backgroundColor: 'rgba(204, 0, 51, 0.08)',
+  },
+  timeSlotRowDisabled: {
+    backgroundColor: '#F3F4F6',
+  },
+  timeSlotTime: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: DARK_NAVY,
+  },
+  timeSlotTimeSelected: {
+    color: RUTGERS_RED,
+  },
+  timeSlotTimeDisabled: {
+    color: MUTED_TEXT,
+  },
+  timeSlotSubtext: {
+    marginTop: 2,
+    fontSize: 12,
+    color: MUTED_TEXT,
+  },
+  timeSlotSubtextSelected: {
+    color: DARK_NAVY,
+  },
+  timeSlotStatusPill: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: 'rgba(34, 197, 94, 0.12)',
+  },
+  timeSlotStatusSelected: {
+    backgroundColor: RUTGERS_RED,
+  },
+  timeSlotStatusDisabled: {
+    backgroundColor: '#E5E7EB',
+  },
+  timeSlotStatusText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  timeSlotStatusTextSelected: {
+    color: '#FFFFFF',
+  },
+  timeSlotStatusTextDisabled: {
+    color: MUTED_TEXT,
+  },
+  reservationSummaryCard: {
+    marginTop: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(204, 0, 51, 0.20)',
+    backgroundColor: 'rgba(204, 0, 51, 0.06)',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  reservationSummaryLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: RUTGERS_RED,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  reservationSummaryTitle: {
+    marginTop: 4,
+    fontSize: 15,
+    fontWeight: '800',
+    color: DARK_NAVY,
+  },
+  reservationSummaryText: {
+    marginTop: 2,
+    fontSize: 13,
+    color: MUTED_TEXT,
+    fontWeight: '600',
   },
   input: {
     backgroundColor: '#F9FAFB',
