@@ -483,6 +483,10 @@ export default function LobbiesScreen() {
       setCreateError('Max players must be a number of at least 2.');
       return;
     }
+    if (max > 50) {
+      setCreateError('Max players cannot exceed 50.');
+      return;
+    }
 
     const minEloTrim = minEloInput.trim();
     let minElo = 0;
@@ -977,6 +981,8 @@ export default function LobbiesScreen() {
                 onChangeText={setLobbyName}
                 placeholder="e.g. Friday Night Hoops"
                 placeholderTextColor={MUTED_TEXT}
+                maxLength={50}
+                returnKeyType="next"
               />
 
               <Text style={styles.label}>Sport</Text>
@@ -1206,8 +1212,14 @@ export default function LobbiesScreen() {
                 style={styles.input}
                 keyboardType="number-pad"
                 value={maxPlayers}
-                onChangeText={setMaxPlayers}
+                onChangeText={(text) => {
+                  // Only allow digits, max 2 chars to prevent absurd values
+                  const cleaned = text.replace(/[^0-9]/g, '').slice(0, 2);
+                  setMaxPlayers(cleaned);
+                }}
+                maxLength={2}
               />
+              <Text style={styles.mutedTextSmall}>Between 2 and 50 players.</Text>
 
               <Text style={styles.label}>Minimum ELO</Text>
               <TextInput
@@ -1217,6 +1229,7 @@ export default function LobbiesScreen() {
                 onChangeText={setMinEloInput}
                 placeholder="0 (default)"
                 placeholderTextColor={MUTED_TEXT}
+                maxLength={4}
               />
               <Text style={styles.mutedTextSmall}>
                 Only players at or above this ELO can join. Leave blank for 0.
