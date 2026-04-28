@@ -849,16 +849,15 @@ export default function LobbyDetailScreen() {
             {activeTab === 'about' ? (
               <View style={styles.section}>
                 <View style={styles.aboutCard}>
-                  <View style={styles.aboutHeroRow}>
-                    <View style={styles.aboutThumbPane}>
-                      <Image source={aboutThumb} style={styles.aboutThumb} />
-                    </View>
-                    <View style={styles.aboutHeroTextWrap}>
-                      <Text style={styles.aboutHeroTitle}>{lobby.lobby_name}</Text>
-                      <View style={styles.aboutSportRow}>
-                        <MaterialIcons name={sportIconFor(lobby.sport)} size={14} color={DARK_NAVY} />
-                        <Text style={styles.aboutSportText}>{lobby.sport}</Text>
-                      </View>
+                  <View style={styles.aboutThumbTop}>
+                    <Image source={aboutThumb} style={styles.aboutThumb} />
+                  </View>
+
+                  <View style={styles.aboutHeroTextWrap}>
+                    <Text style={styles.aboutHeroTitle}>{lobby.lobby_name}</Text>
+                    <View style={styles.aboutSportRow}>
+                      <MaterialIcons name={sportIconFor(lobby.sport)} size={14} color={DARK_NAVY} />
+                      <Text style={styles.aboutSportText}>{lobby.sport}</Text>
                     </View>
                   </View>
 
@@ -1586,30 +1585,16 @@ const styles = StyleSheet.create({
     padding: 14,
     gap: 10,
   },
-  aboutHeroRow: {
-    position: 'relative',
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: 10,
-    marginBottom: 2,
-    minHeight: 92,
-  },
-  aboutHeroTextWrap: {
-    flex: 1,
-    justifyContent: 'center',
-    maxWidth: '56%',
-    zIndex: 1,
-  },
-  aboutThumbPane: {
-    position: 'absolute',
-    right: -15,
-    top: -15,
-    height: 230,
-    width: 700,
+  aboutThumbTop: {
+    width: '100%',
+    height: 180,
     borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: '#EEF2F7',
-    opacity: 0.96,
+  },
+  aboutHeroTextWrap: {
+    justifyContent: 'center',
+    marginTop: 2,
   },
   aboutThumb: {
     width: '100%',

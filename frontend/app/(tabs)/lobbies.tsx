@@ -128,7 +128,6 @@ function sportIconFor(sport: string): keyof typeof MaterialIcons.glyphMap {
   return 'sports';
 }
 
-
 function startOfDay(date: Date): Date {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -190,6 +189,14 @@ function buildTimeSlotsForDay(day: Date): Date[] {
   return slots;
 }
 
+function humanizeStatus(status: string): string {
+  const cleaned = status.trim();
+  if (!cleaned) return 'Unknown';
+  return cleaned
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
 
 export default function LobbiesScreen() {
   const router = useRouter();
@@ -209,6 +216,7 @@ export default function LobbiesScreen() {
   const [maxPlayers, setMaxPlayers] = useState<string>('10');
   const [minEloInput, setMinEloInput] = useState<string>('');
   const [sportEloBySport, setSportEloBySport] = useState<Record<string, number>>({});
+  const [myLobbyIds, setMyLobbyIds] = useState<Set<string>>(new Set());
   const [isPublic, setIsPublic] = useState<boolean>(true);
   const [lobbyPassword, setLobbyPassword] = useState('');
   const [lobbyPasswordConfirm, setLobbyPasswordConfirm] = useState('');
@@ -266,9 +274,10 @@ export default function LobbiesScreen() {
 
         void (async () => {
           try {
-            const [meRes, sportStatsRes] = await Promise.all([
+            const [meRes, sportStatsRes, myUpcomingRes] = await Promise.all([
               authedFetch('/users/me'),
               authedFetch('/users/me/sport-stats'),
+              authedFetch('/lobbies/my/upcoming'),
             ]);
 
             if (meRes.ok) {
@@ -291,6 +300,10 @@ export default function LobbiesScreen() {
               }
 
               setSportEloBySport(map);
+            }
+            if (myUpcomingRes.ok) {
+              const myLobbies = (await myUpcomingRes.json()) as { lobby_id: string }[];
+              setMyLobbyIds(new Set(myLobbies.map((l) => l.lobby_id)));
             }
           } catch {
             // ignore user loading errors; lobbies list still works
@@ -847,12 +860,24 @@ export default function LobbiesScreen() {
               });
               const campusLabel = campusForLobby(lobby) || 'Campus TBD';
               const imageSource = getCampusThumbnail(campusLabel);
+              const lobbyStatus = lobby.status.toLowerCase();
+              const isHost = currentUserId === lobby.host_user_id;
+              const isMyLobby = isHost || myLobbyIds.has(lobby.lobby_id);
+              const isInProgress = lobbyStatus === 'in_progress';
+              const canOpenLobby = !(isInProgress && !isMyLobby);
 
               return (
                 <Pressable
                   key={lobby.lobby_id}
-                  style={({ pressed }) => [styles.lobbyCard, pressed && styles.lobbyCardPressed]}
-                  onPress={() => router.push(`/lobby/${lobby.lobby_id}`)}
+                  style={({ pressed }) => [
+                    styles.lobbyCard,
+                    !canOpenLobby && styles.lobbyCardDisabled,
+                    pressed && canOpenLobby && styles.lobbyCardPressed,
+                  ]}
+                  onPress={() => {
+                    if (!canOpenLobby) return;
+                    router.push(`/lobby/${lobby.lobby_id}`);
+                  }}
                 >
                   <Image source={imageSource} style={styles.campusThumb} />
                   <View style={styles.lobbyMain}>
@@ -901,19 +926,17 @@ export default function LobbiesScreen() {
                     <View style={styles.bottomRow}>
                       <Text style={styles.mutedInline}>
                         {lobby.is_public ? 'Public' : 'Private'} · Min ELO {lobby.min_elo ?? 0}
-                        {currentUserId === lobby.host_user_id ? ' · Open' : ''}
+                        {isHost ? ' · Host' : ''}
                       </Text>
                       <View
                         style={[
                           styles.statusPill,
-                          currentUserId === lobby.host_user_id && styles.statusPillHost,
-                          lobby.status.toLowerCase() !== 'open' && styles.statusPillMuted,
+                          isHost && styles.statusPillHost,
+                          lobbyStatus !== 'open' && styles.statusPillMuted,
                         ]}
                       >
                         <Text style={styles.statusPillText}>
-                          {currentUserId === lobby.host_user_id
-                            ? 'Host'
-                            : lobby.status.charAt(0).toUpperCase() + lobby.status.slice(1)}
+                          {isHost ? 'Host' : humanizeStatus(lobby.status)}
                         </Text>
                       </View>
                     </View>
@@ -1584,6 +1607,9 @@ const styles = StyleSheet.create({
   },
   lobbyCardPressed: {
     opacity: 0.94,
+  },
+  lobbyCardDisabled: {
+    opacity: 0.6,
   },
   campusThumb: {
     width: 76,
