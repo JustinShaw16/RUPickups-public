@@ -128,6 +128,19 @@ function sportIconFor(sport: string): keyof typeof MaterialIcons.glyphMap {
   return 'sports';
 }
 
+<<<<<<< HEAD
+=======
+function humanizeStatus(status: string): string {
+  const raw = status.trim();
+  if (!raw) return 'Unknown';
+  return raw
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+
+>>>>>>> 3d30fa0 (variable mismatch fix)
 function startOfDay(date: Date): Date {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
