@@ -68,19 +68,21 @@ export default function TabLayout() {
             { backgroundColor: colors.background, paddingTop: Math.max(insets.top, 10) },
           ]}
         >
-          <View style={styles.menuButtonWrap}>
-            <Pressable
-              style={({ pressed }) => [styles.menuButton, pressed && styles.menuButtonPressed]}
-              onPress={() => setDrawerOpen(true)}
-            >
-              <MaterialIcons name="menu" size={28} color={colors.text} />
-            </Pressable>
+          <View style={styles.topBarLeft}>
+            <View style={styles.menuButtonWrap}>
+              <Pressable
+                style={({ pressed }) => [styles.menuButton, pressed && styles.menuButtonPressed]}
+                onPress={() => setDrawerOpen(true)}
+              >
+                <MaterialIcons name="menu" size={28} color={colors.text} />
+              </Pressable>
+            </View>
+            <Image
+              source={require('../photos/RUPickups.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
           </View>
-          <Image
-            source={require('../photos/RUPickups.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
         </View>
 
         <View style={styles.tabsWrap}>
@@ -168,27 +170,30 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 8,
     paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(0,0,0,0.08)',
+  },
+  topBarLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   menuButtonWrap: {
     zIndex: 1,
   },
   menuButton: {
     padding: 8,
-    marginRight: 4,
+    marginRight: 0,
   },
   menuButtonPressed: {
     opacity: 0.7,
   },
   logo: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
+    marginLeft: -12,
+    width: 122,
     height: 44,
-    zIndex: 0,
   },
   tabsWrap: {
     flex: 1,
