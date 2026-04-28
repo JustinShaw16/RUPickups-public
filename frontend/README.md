@@ -301,6 +301,46 @@ npm run web
 
 ---
 
+# Frontend Testing
+
+Install dependencies and run tests:
+
+```
+npm install
+npm run test
+```
+
+Run with coverage:
+
+```
+npm run coverage
+```
+
+Run in watch mode while developing:
+
+```
+npm run test:watch
+```
+
+Target a single test file:
+
+```
+npm test -- layout-auth-routing.test.tsx
+```
+
+What these tests cover first:
+
+* auth/session routing guard behavior in `app/_layout.tsx`
+* login validation + success path in `app/login.tsx`
+* authenticated backend fetch helpers and private-lobby unlock token handling in `api/`
+
+Coverage notes:
+
+* Jest coverage output is written to `frontend/coverage/`
+* The suite enforces a global minimum threshold (70% for lines/statements/functions)
+
+---
+
 # Technology Stack
 
 Frontend framework

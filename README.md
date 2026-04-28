@@ -181,6 +181,45 @@ Once both backend and frontend are running, you can develop features under `back
 
 ---
 
-## 6. Use of Artificial Intelligence
+## 6. Running Tests and Coverage
+
+Run tests from the project root in separate terminals.
+
+### Backend tests (pytest + coverage gate)
+
+```bash
+cd backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+pytest
+```
+
+- Coverage is generated as `backend/coverage.xml`.
+- The backend suite enforces a minimum 70% coverage threshold for the current critical-module coverage target.
+- Targeted runs are supported, for example: `pytest tests/unit/test_auth.py -q`.
+
+### Frontend tests (Jest + coverage gate)
+
+```bash
+cd frontend
+npm install
+npm run test
+npm run coverage
+```
+
+- Coverage output is generated under `frontend/coverage/`.
+- The frontend suite enforces a global 70% minimum for statements/lines/functions.
+- Targeted runs are supported, for example: `npm test -- login.test.tsx`.
+
+### Latest automated results
+
+- Every push and pull request runs both suites in GitHub Actions via `.github/workflows/tests.yml`.
+- CI logs are the source of truth for latest pass/fail state.
+- Coverage artifacts are uploaded on each run for backend (`coverage.xml`) and frontend (`coverage/`).
+
+---
+
+## 7. Use of Artificial Intelligence
 
 Artificial Intelligence has been used in the development of this application so far. We are at an early stage in the app and have thus used AI to make it easier to visualize the UI. A lot of our actual work comes with setting up the infrastructure, creating API calls, and connecting to the database on both the backend and frontend. However, smaller things like adjusting the margins or color of a box and more things that make it look "better" have been completed more efficiently with AI.

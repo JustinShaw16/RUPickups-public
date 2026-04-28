@@ -290,6 +290,37 @@ http://127.0.0.1:8000/docs
 
 ---
 
+# Backend Testing
+
+Install dependencies and run all tests:
+
+```
+pip install -r requirements.txt
+pytest
+```
+
+Run targeted subsets:
+
+```
+pytest tests/unit -q
+pytest tests/integration -q
+pytest tests/integration/test_lobby_routes.py -q
+```
+
+Coverage and quality gate:
+
+* Coverage output is generated as `coverage.xml`
+* The backend test configuration enforces a 70% minimum coverage threshold for the critical first-pass modules under test
+
+Current high-value first-pass coverage focuses on:
+
+* auth token validation behavior (`app/core/auth.py`)
+* health/db route contract (`app/api/routes/health_route.py`)
+* lobby join/unlock route behavior (`app/api/routes/lobby_route.py`)
+* match lifecycle route/service behavior (`app/api/routes/matches_route.py`, `app/services/matches_service.py`)
+
+---
+
 # Technology Stack
 
 Backend framework:

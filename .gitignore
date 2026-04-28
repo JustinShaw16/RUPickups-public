@@ -11,3 +11,9 @@ venv/
 
 # node
 node_modules
+
+# test artifacts
+coverage/
+frontend/coverage/
+backend/coverage.xml
+backend/.coverage
