@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { authedFetch, authedFetchForLobby } from '@/api/backend';
 
@@ -93,6 +94,8 @@ function buildSlotsFromAssignments(
 export default function MatchPage() {
   const { id: matchId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const topInsetPadding = Math.max(insets.top + (Platform.OS === 'android' ? 18 : 0), 12);
 
   const [match, setMatch] = useState<Match | null>(null);
   const [players, setPlayers] = useState<Participant[]>([]);
@@ -246,7 +249,7 @@ export default function MatchPage() {
     if (!isCompleted) return;
 
     const t = setTimeout(() => {
-      router.replace({ pathname: '/lobby/[id]', params: { id: match.lobby_id } });
+      router.replace({ pathname: '/lobby/[id]', params: { id: match.lobby_id, fromMatch: '1' } });
     }, 500);
 
     return () => clearTimeout(t);
@@ -257,7 +260,7 @@ export default function MatchPage() {
       router.replace('/(tabs)/lobbies');
       return;
     }
-    router.replace({ pathname: '/lobby/[id]', params: { id: match.lobby_id } });
+    router.replace({ pathname: '/lobby/[id]', params: { id: match.lobby_id, fromMatch: '1' } });
   };
 
   const persistTeamAssignments = useCallback(
@@ -477,7 +480,7 @@ export default function MatchPage() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView contentContainerStyle={[styles.container, { paddingTop: topInsetPadding }]}>
         <View style={styles.headerRow}>
           <Pressable
             onPress={handleBackToLobby}

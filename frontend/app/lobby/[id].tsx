@@ -118,9 +118,10 @@ const BORDER_GRAY = '#E5E7EB';
 const MUTED_TEXT = '#6B7280';
 
 export default function LobbyDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, fromMatch } = useLocalSearchParams<{ id: string; fromMatch?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const topInsetPadding = Math.max(insets.top + (Platform.OS === 'android' ? 18 : 0), 12);
   const [lobby, setLobby] = useState<Lobby | null>(null);
   const [locations, setLocations] = useState<Location[]>([]);
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -277,11 +278,19 @@ export default function LobbyDetailScreen() {
 
   useEffect(() => {
     if (!id) return;
+    if (fromMatch === '1') return;
 
     let cancelled = false;
 
     const checkAndNavigate = async () => {
       if (cancelled || redirectingToMatch) return;
+      if (!currentUserId) return;
+
+      const canViewActiveMatch =
+        lobby?.host_user_id === currentUserId ||
+        participants.some((p) => p.player_id === currentUserId);
+      if (!canViewActiveMatch) return;
+
       const active = await fetchActiveMatch();
       if (!active?.match_id || cancelled) return;
 
@@ -298,7 +307,7 @@ export default function LobbyDetailScreen() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [id, fetchActiveMatch, redirectingToMatch, router]);
+  }, [id, fromMatch, fetchActiveMatch, redirectingToMatch, router, currentUserId, lobby, participants]);
 
   const readErrorDetail = async (res: Response): Promise<string> => {
     const raw = await res.text().catch(() => '');
@@ -770,7 +779,7 @@ export default function LobbyDetailScreen() {
   if (!id) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <View style={[styles.container, { paddingTop: Math.max(insets.top, 12) }]}>
+        <View style={[styles.container, { paddingTop: topInsetPadding }]}>
           <Text style={styles.errorText}>Missing lobby ID.</Text>
         </View>
       </SafeAreaView>
@@ -779,7 +788,7 @@ export default function LobbyDetailScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={[styles.container, { paddingTop: Math.max(insets.top, 12) }]}>
+      <View style={[styles.container, { paddingTop: topInsetPadding }]}>
         <View style={styles.headerRow}>
           <Pressable
             onPress={() => router.replace('/(tabs)/lobbies')}
