@@ -82,8 +82,17 @@ function locationMatchesSport(location: Location, sport: string): boolean {
   if (selected === 'volleyball') return name.includes('volleyball');
   if (selected === 'pickleball') return name.includes('pickleball') || name.includes('pickle');
   if (selected === 'tennis') return name.includes('tennis');
-  if (selected === 'badminton') return name.includes('badminton');
-  if (selected === 'soccer') return name.includes('soccer') || name.includes('field');
+  if (selected === 'badminton') {
+    return (
+      name.includes('badminton') ||
+      name.includes('tennis') ||
+      name.includes('pickleball') ||
+      name.includes('pickle')
+    );
+  }
+  if (selected === 'soccer') {
+    return name.includes('soccer') || name.includes('field') || name.includes('turf');
+  }
 
   return name.includes(selected);
 }
@@ -96,6 +105,14 @@ const SPORT_OPTIONS = [
   'Badminton',
   'Soccer',
 ] as const;
+const SPORT_MAX_PLAYERS: Record<(typeof SPORT_OPTIONS)[number], number> = {
+  Basketball: 10,
+  Volleyball: 12,
+  Pickleball: 4,
+  Tennis: 4,
+  Badminton: 4,
+  Soccer: 22,
+};
 type TimeFilter = 'any' | 'upcoming' | 'past';
 const LOBBIES_PAGE_SIZE = 8;
 const SLOT_INTERVAL_MINUTES = 30;
@@ -128,8 +145,11 @@ function sportIconFor(sport: string): keyof typeof MaterialIcons.glyphMap {
   return 'sports';
 }
 
-<<<<<<< HEAD
-=======
+function maxPlayersForSport(sport: string): number {
+  const hit = SPORT_OPTIONS.find((s) => s === sport.trim());
+  return hit ? SPORT_MAX_PLAYERS[hit] : 50;
+}
+
 function humanizeStatus(status: string): string {
   const raw = status.trim();
   if (!raw) return 'Unknown';
@@ -139,8 +159,6 @@ function humanizeStatus(status: string): string {
     .join(' ');
 }
 
-
->>>>>>> 3d30fa0 (variable mismatch fix)
 function startOfDay(date: Date): Date {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -509,8 +527,9 @@ export default function LobbiesScreen() {
       setCreateError('Max players must be a number of at least 2.');
       return;
     }
-    if (max > 50) {
-      setCreateError('Max players cannot exceed 50.');
+    const sportCap = maxPlayersForSport(trimmedSport);
+    if (max > sportCap) {
+      setCreateError(`${trimmedSport} lobbies can have at most ${sportCap} players.`);
       return;
     }
 
@@ -1031,6 +1050,7 @@ export default function LobbiesScreen() {
                       style={[styles.pill, selected && styles.pillSelected]}
                       onPress={() => {
                         setSport(option);
+                        setMaxPlayers(String(maxPlayersForSport(option)));
                         setLocationId(null);
                         setSelectedSlot(null);
                       }}
@@ -1255,7 +1275,14 @@ export default function LobbiesScreen() {
                 }}
                 maxLength={2}
               />
-              <Text style={styles.mutedTextSmall}>Between 2 and 50 players.</Text>
+              <Text style={styles.mutedTextSmall}>
+                Between 2 and {sport.trim() ? maxPlayersForSport(sport) : 50} players.
+              </Text>
+              {sport.trim() ? (
+                <Text style={styles.mutedTextSmall}>
+                  {sport} cap: {maxPlayersForSport(sport)} players.
+                </Text>
+              ) : null}
 
               <Text style={styles.label}>Minimum ELO</Text>
               <TextInput

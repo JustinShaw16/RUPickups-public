@@ -64,12 +64,14 @@ export default function RootLayout() {
         }
 
         if (res.status === 404) {
-          if (!inCompleteProfile) router.replace('/complete-profile')
+          await supabase.auth.signOut()
+          if (!inAuth) router.replace('/login')
           return
         }
 
         if (!res.ok) {
-          if (!inCompleteProfile) router.replace('/complete-profile')
+          await supabase.auth.signOut()
+          if (!inAuth) router.replace('/login')
           return
         }
 
@@ -80,7 +82,8 @@ export default function RootLayout() {
           !!user?.preferred_campus
 
         if (!hasProfile) {
-          if (!inCompleteProfile) router.replace('/complete-profile')
+          await supabase.auth.signOut()
+          if (!inAuth) router.replace('/login')
           return
         }
 
@@ -88,7 +91,8 @@ export default function RootLayout() {
           router.replace('/(tabs)/lobbies')
         }
       } catch {
-        if (!inCompleteProfile) router.replace('/complete-profile')
+        await supabase.auth.signOut()
+        if (!inAuth) router.replace('/login')
       }
     }
 

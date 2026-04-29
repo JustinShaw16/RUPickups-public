@@ -54,6 +54,7 @@ def _normalize_uuid(s: str) -> str:
 
 
 LOBBY_OVERLAP_WINDOW_MINUTES = 90
+LOBBY_STALE_GRACE_MINUTES = 30
 
 
 def _normalize_lobby_name(name: str) -> str:
@@ -167,6 +168,7 @@ def get_lobby_ids_for_participant(user_id: str) -> set[str]:
 
 
 def get_lobby_by_id(lobby_id: UUID) -> dict | None:
+    cleanup_expired_unstarted_lobbies()
     db = get_supabase_client()
     response = db.table("lobby").select("*").eq("lobby_id", str(lobby_id)).execute()
     if not response.data or len(response.data) == 0:
@@ -192,6 +194,7 @@ def get_upcoming_lobbies_for_user(user_id: str):
     3. Filter to rows where status == "open" and return.
     """
 
+    cleanup_expired_unstarted_lobbies()
     db = get_supabase_admin_client()
     if db is None:
         raise RuntimeError(
@@ -278,6 +281,7 @@ def get_upcoming_lobbies_for_user(user_id: str):
 
 
 def get_all_lobbies():
+    cleanup_expired_unstarted_lobbies()
     db = get_supabase_client()
 
     response = (
@@ -360,6 +364,77 @@ def get_all_lobbies():
         row["participant_average_elo"] = round(sum(elos) / len(elos), 1)
 
     return rows
+
+
+def cleanup_expired_unstarted_lobbies() -> int:
+    """
+    Delete stale lobbies that are 30+ minutes past start time when no started
+    match exists for them.
+
+    A match is considered started if its status is in_progress or completed.
+    """
+    reader = get_supabase_admin_client() or get_supabase_client()
+    writer = get_supabase_admin_client() or reader
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=LOBBY_STALE_GRACE_MINUTES)
+
+    try:
+        rows = (
+            reader.table("lobby")
+            .select("lobby_id, status, scheduled_start_time")
+            .execute()
+            .data
+            or []
+        )
+    except Exception:
+        return 0
+
+    candidate_ids: list[str] = []
+    for row in rows:
+        lobby_id = row.get("lobby_id")
+        if not lobby_id:
+            continue
+        status = str(row.get("status") or "").lower()
+        if status not in {"open", "closed", "full"}:
+            continue
+        raw_start = row.get("scheduled_start_time")
+        if not raw_start:
+            continue
+        try:
+            start_at = _coerce_datetime(raw_start)
+        except ValueError:
+            continue
+        if start_at <= cutoff:
+            candidate_ids.append(str(lobby_id))
+
+    if not candidate_ids:
+        return 0
+
+    try:
+        match_rows = (
+            reader.table("matches")
+            .select("lobby_id, status")
+            .in_("lobby_id", candidate_ids)
+            .execute()
+            .data
+            or []
+        )
+    except Exception:
+        match_rows = []
+
+    started_lobby_ids = {
+        str(row.get("lobby_id"))
+        for row in match_rows
+        if str(row.get("status") or "").lower() in {"in_progress", "completed"}
+    }
+    deletable_ids = [lid for lid in candidate_ids if lid not in started_lobby_ids]
+    if not deletable_ids:
+        return 0
+
+    try:
+        writer.table("lobby").delete().in_("lobby_id", deletable_ids).execute()
+    except Exception:
+        return 0
+    return len(deletable_ids)
 
 
 def create_lobby(*, host_user_id: str, payload: LobbyCreate) -> dict:

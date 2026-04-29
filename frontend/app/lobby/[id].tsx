@@ -34,6 +34,20 @@ const SPORT_OPTIONS = [
   'Badminton',
   'Soccer',
 ] as const;
+const SPORT_MAX_PLAYERS: Record<(typeof SPORT_OPTIONS)[number], number> = {
+  Basketball: 10,
+  Volleyball: 12,
+  Pickleball: 4,
+  Tennis: 4,
+  Badminton: 4,
+  Soccer: 22,
+};
+const CAMPUS_COLORS: Record<string, string> = {
+  'College Ave': '#CC0033',
+  Busch: '#0054A4',
+  Livingston: '#2E7D32',
+  'Cook/Douglass': '#E65100',
+};
 
 const CAMPUS_IMAGES = {
   collegeave: require('../photos/CollegeAve.jpg'),
@@ -47,6 +61,10 @@ function normalizeCampus(campus: string): string {
   if (compact === 'collegeavenue' || compact === 'collegeave' || compact === 'ca') return 'collegeave';
   if (compact === 'cookdouglass' || compact === 'cookanddouglass' || compact === 'cd') return 'cookdouglass';
   return compact;
+}
+
+function getCampusColor(campus: string): string {
+  return CAMPUS_COLORS[campus] ?? '#6B7280';
 }
 
 function campusThumbFor(campus: string | undefined | null) {
@@ -65,6 +83,88 @@ function sportIconFor(sport: string): keyof typeof MaterialIcons.glyphMap {
   if (s === 'volleyball') return 'sports-volleyball';
   if (s === 'pickleball' || s === 'badminton') return 'sports-tennis';
   return 'sports';
+}
+
+function locationMatchesSport(location: Location, sport: string): boolean {
+  const selected = sport.trim().toLowerCase();
+  if (!selected) return true;
+  const name = `${location.name} ${location.address}`.toLowerCase();
+  if (selected === 'basketball') {
+    return (
+      name.includes('basketball') ||
+      name.includes('main gym') ||
+      name.includes('annex') ||
+      name.includes('gym')
+    );
+  }
+  if (selected === 'volleyball') return name.includes('volleyball');
+  if (selected === 'pickleball') return name.includes('pickleball') || name.includes('pickle');
+  if (selected === 'tennis') return name.includes('tennis');
+  if (selected === 'badminton') {
+    return (
+      name.includes('badminton') ||
+      name.includes('tennis') ||
+      name.includes('pickleball') ||
+      name.includes('pickle')
+    );
+  }
+  if (selected === 'soccer') {
+    return name.includes('soccer') || name.includes('field') || name.includes('turf');
+  }
+  return name.includes(selected);
+}
+
+function maxPlayersForSport(sport: string): number {
+  const hit = SPORT_OPTIONS.find((s) => s === sport.trim());
+  return hit ? SPORT_MAX_PLAYERS[hit] : 50;
+}
+
+function startOfDay(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function slotKey(date: Date): string {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}-${date.getHours()}-${date.getMinutes()}`;
+}
+
+function buildTimeSlotsForDay(day: Date): Date[] {
+  const base = startOfDay(day);
+  const slots: Date[] = [];
+  for (let hour = 8; hour <= 22; hour++) {
+    const d = new Date(base);
+    d.setHours(hour, 0, 0, 0);
+    slots.push(d);
+  }
+  return slots;
+}
+
+function formatReservationSummary(date: Date): string {
+  return date.toLocaleString(undefined, { dateStyle: 'full', timeStyle: 'short' });
+}
+
+function dateKey(date: Date): string {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function formatDayChip(date: Date): string {
+  return date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function formatSlotTime(date: Date): string {
+  return date.toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function toGoogleCalendarUtc(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return (
+    `${date.getUTCFullYear()}${pad(date.getUTCMonth() + 1)}${pad(date.getUTCDate())}` +
+    `T${pad(date.getUTCHours())}${pad(date.getUTCMinutes())}${pad(date.getUTCSeconds())}Z`
+  );
 }
 
 type Lobby = {
@@ -140,6 +240,8 @@ export default function LobbyDetailScreen() {
   const [editSport, setEditSport] = useState('');
   const [editLocationId, setEditLocationId] = useState<string | null>(null);
   const [editScheduledAt, setEditScheduledAt] = useState<Date>(() => new Date());
+  const [editSelectedDay, setEditSelectedDay] = useState<Date>(() => startOfDay(new Date()));
+  const [editSelectedSlot, setEditSelectedSlot] = useState<Date | null>(null);
   const [editMaxPlayers, setEditMaxPlayers] = useState('10');
   const [editMinElo, setEditMinElo] = useState('0');
   const [editIsPublic, setEditIsPublic] = useState(true);
@@ -154,6 +256,7 @@ export default function LobbyDetailScreen() {
   const [joinPassword, setJoinPassword] = useState('');
   const [joinUnlockBusy, setJoinUnlockBusy] = useState(false);
   const [joinUnlockError, setJoinUnlockError] = useState<string | null>(null);
+  const [calendarAdded, setCalendarAdded] = useState(false);
 
   const [initialEditWasPublic, setInitialEditWasPublic] = useState(true);
   const [editPrivatePassword, setEditPrivatePassword] = useState('');
@@ -162,6 +265,7 @@ export default function LobbyDetailScreen() {
   const [showEditPasswordConfirm, setShowEditPasswordConfirm] = useState(false);
   const [showJoinPassword, setShowJoinPassword] = useState(false);
   const [activeTab, setActiveTab] = useState<LobbyTab>('about');
+  const [reservationLobbies, setReservationLobbies] = useState<Lobby[]>([]);
 
   const loadLobby = useCallback(async () => {
     if (!id) return;
@@ -368,6 +472,7 @@ export default function LobbyDetailScreen() {
 
       void loadParticipants();
       void loadLobby();
+      promptAddToCalendar();
     } catch (e) {
       setJoinError(e instanceof Error ? e.message : 'Failed to join lobby.');
     } finally {
@@ -431,6 +536,7 @@ export default function LobbyDetailScreen() {
       // Reload from server to get authoritative data (username, etc.)
       void loadLobby();
       void loadParticipants();
+      promptAddToCalendar();
     } catch (e) {
       setJoinUnlockError(e instanceof Error ? e.message : 'Could not unlock lobby.');
     } finally {
@@ -457,6 +563,7 @@ export default function LobbyDetailScreen() {
       }
 
       await Promise.all([loadLobby(), loadParticipants()]);
+      setCalendarAdded(false);
     } catch (e) {
       setJoinError(e instanceof Error ? e.message : 'Failed to leave lobby.');
     } finally {
@@ -535,6 +642,50 @@ export default function LobbyDetailScreen() {
   const isBelowMinElo =
     lobbyMinElo > 0 && lobby != null && myEloForLobbySport < lobbyMinElo;
 
+  const editLocations = useMemo(() => {
+    const strict = locations.filter((loc) => locationMatchesSport(loc, editSport));
+    if (strict.length > 0) return strict;
+    return locations;
+  }, [locations, editSport]);
+  const editSelectedLocation = editLocationId
+    ? editLocations.find((loc) => loc.location_id === editLocationId) ??
+      locations.find((loc) => loc.location_id === editLocationId) ??
+      null
+    : null;
+
+  useEffect(() => {
+    if (!editLocationId) return;
+    const stillValid = editLocations.some((loc) => loc.location_id === editLocationId);
+    if (!stillValid) {
+      setEditLocationId(null);
+      setEditSelectedSlot(null);
+    }
+  }, [editLocationId, editLocations]);
+
+  const editReservationDays = useMemo(
+    () =>
+      Array.from({ length: 7 }, (_, i) => {
+        const d = startOfDay(new Date());
+        d.setDate(d.getDate() + i);
+        return d;
+      }),
+    [],
+  );
+  const editAvailableTimeSlots = useMemo(() => buildTimeSlotsForDay(editSelectedDay), [editSelectedDay]);
+  const editBookedSlotKeys = useMemo(() => {
+    const keys = new Set<string>();
+    if (!editLocationId) return keys;
+    for (const l of reservationLobbies) {
+      if (l.location_id !== editLocationId) continue;
+      if (id && l.lobby_id === id) continue;
+      const status = (l.status || '').toLowerCase();
+      if (status === 'cancelled' || status === 'completed') continue;
+      const start = new Date(l.scheduled_start_time);
+      if (!Number.isNaN(start.getTime())) keys.add(slotKey(start));
+    }
+    return keys;
+  }, [reservationLobbies, editLocationId, id]);
+
   const myEloForEditSport = useMemo(() => {
     const s = editSport.trim();
     if (!s) return null;
@@ -544,11 +695,15 @@ export default function LobbyDetailScreen() {
 
   const openEdit = useCallback(() => {
     if (!lobby) return;
+    const sportCap = maxPlayersForSport(lobby.sport);
+    const initialStart = new Date(lobby.scheduled_start_time);
     setEditLobbyName(lobby.lobby_name);
     setEditSport(lobby.sport);
     setEditLocationId(lobby.location_id);
-    setEditScheduledAt(new Date(lobby.scheduled_start_time));
-    setEditMaxPlayers(String(lobby.max_players));
+    setEditScheduledAt(initialStart);
+    setEditSelectedDay(startOfDay(initialStart));
+    setEditSelectedSlot(initialStart);
+    setEditMaxPlayers(String(Math.min(lobby.max_players, sportCap)));
     setEditMinElo(String(lobby.min_elo ?? 0));
     setEditIsPublic(lobby.is_public);
     setInitialEditWasPublic(lobby.is_public);
@@ -557,6 +712,16 @@ export default function LobbyDetailScreen() {
     setShowEditPassword(false);
     setShowEditPasswordConfirm(false);
     setEditError(null);
+    void (async () => {
+      try {
+        const res = await authedFetch('/lobbies');
+        if (!res.ok) return;
+        const rows = (await res.json()) as Lobby[];
+        setReservationLobbies(rows);
+      } catch {
+        // ignore reservation loading errors
+      }
+    })();
     setEditOpen(true);
   }, [lobby]);
 
@@ -608,17 +773,18 @@ export default function LobbyDetailScreen() {
   const handleSaveEdit = async () => {
     if (!id || !lobby || saving) return;
     const name = editLobbyName.trim();
+    const trimmedSport = editSport.trim();
     const max = parseInt(editMaxPlayers, 10);
     if (!name) {
       setEditError('Please enter a lobby name.');
       return;
     }
-    if (!editSport.trim()) {
+    if (!trimmedSport) {
       setEditError('Please select a sport.');
       return;
     }
     const selectedLoc = editLocationId
-      ? locations.find((loc) => loc.location_id === editLocationId)
+      ? editLocations.find((loc) => loc.location_id === editLocationId)
       : null;
     if (!editLocationId || !selectedLoc) {
       setEditError('Please select a location.');
@@ -626,6 +792,11 @@ export default function LobbyDetailScreen() {
     }
     if (Number.isNaN(max) || max < 2) {
       setEditError('Max players must be at least 2.');
+      return;
+    }
+    const sportCap = maxPlayersForSport(trimmedSport);
+    if (max > sportCap) {
+      setEditError(`${trimmedSport} lobbies can have at most ${sportCap} players.`);
       return;
     }
     const minEloTrim = editMinElo.trim();
@@ -647,8 +818,17 @@ export default function LobbyDetailScreen() {
         return;
       }
     }
-    if (editScheduledAt.getTime() <= Date.now()) {
+    const scheduledAt = editSelectedSlot ?? editScheduledAt;
+    if (scheduledAt.getTime() <= Date.now()) {
       setEditError('Start time must be in the future.');
+      return;
+    }
+    if (!editSelectedSlot) {
+      setEditError('Please select an available reservation time slot.');
+      return;
+    }
+    if (editBookedSlotKeys.has(slotKey(editSelectedSlot))) {
+      setEditError('That court is already booked for this time slot. Please choose another slot.');
       return;
     }
     if (!editIsPublic) {
@@ -677,13 +857,13 @@ export default function LobbyDetailScreen() {
     try {
       const patchBody: Record<string, unknown> = {
         lobby_name: name,
-        sport: editSport.trim(),
+        sport: trimmedSport,
         campus: selectedLoc.campus,
         location_id: editLocationId,
         is_public: editIsPublic,
         max_players: max,
         min_elo: minElo,
-        scheduled_start_time: editScheduledAt.toISOString(),
+        scheduled_start_time: scheduledAt.toISOString(),
       };
       if (!editIsPublic) {
         if (initialEditWasPublic) {
@@ -775,6 +955,55 @@ export default function LobbyDetailScreen() {
       /* ignore */
     });
   }, [lobby, location]);
+
+  const openLobbyInGoogleCalendar = useCallback(async () => {
+    if (!lobby) return;
+    const start = new Date(lobby.scheduled_start_time);
+    if (Number.isNaN(start.getTime())) return;
+    const end = new Date(start.getTime() + 90 * 60 * 1000);
+
+    const title = `${lobby.lobby_name} (${lobby.sport})`;
+    const eventLocation = [lobby.campus, location?.name, location?.address].filter(Boolean).join(' · ');
+    const details = [
+      `Sport: ${lobby.sport}`,
+      `Lobby: ${lobby.lobby_name}`,
+      `Campus: ${lobby.campus}`,
+      location?.name ? `Court: ${location.name}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const url =
+      'https://calendar.google.com/calendar/render?action=TEMPLATE' +
+      `&text=${encodeURIComponent(title)}` +
+      `&dates=${toGoogleCalendarUtc(start)}/${toGoogleCalendarUtc(end)}` +
+      `&location=${encodeURIComponent(eventLocation)}` +
+      `&details=${encodeURIComponent(details)}`;
+
+    try {
+      await Linking.openURL(url);
+      setCalendarAdded(true);
+    } catch {
+      if (Platform.OS === 'web') {
+        window.alert('Could not open Google Calendar.');
+      } else {
+        Alert.alert('Calendar', 'Could not open Google Calendar.');
+      }
+    }
+  }, [lobby, location]);
+
+  const promptAddToCalendar = useCallback(() => {
+    if (calendarAdded) return;
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm('Add this lobby to Google Calendar now?');
+      if (confirmed) void openLobbyInGoogleCalendar();
+      return;
+    }
+    Alert.alert('Add to Calendar', 'Add this lobby to Google Calendar now?', [
+      { text: 'Not now', style: 'cancel' },
+      { text: 'Sure', onPress: () => void openLobbyInGoogleCalendar() },
+    ]);
+  }, [calendarAdded, openLobbyInGoogleCalendar]);
 
   if (!id) {
     return (
@@ -904,6 +1133,19 @@ export default function LobbyDetailScreen() {
                   </View>
                   <MaterialIcons name="open-in-new" size={20} color={MUTED_TEXT} />
                 </Pressable>
+
+                {isParticipant && !calendarAdded ? (
+                  <Pressable style={styles.calendarCard} onPress={() => void openLobbyInGoogleCalendar()}>
+                    <MaterialIcons name="event" size={22} color={RUTGERS_RED} />
+                    <View style={styles.mapCardTextWrap}>
+                      <Text style={styles.mapCardTitle}>Add to Calendar</Text>
+                      <Text style={styles.mapCardSubtitle}>
+                        Add {lobby.lobby_name} to Google Calendar
+                      </Text>
+                    </View>
+                    <MaterialIcons name="open-in-new" size={20} color={MUTED_TEXT} />
+                  </Pressable>
+                ) : null}
 
                 {isHost ? (
                   <View style={styles.hostActionsRow}>
@@ -1122,6 +1364,12 @@ export default function LobbyDetailScreen() {
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
+            <ScrollView
+              style={styles.modalScroll}
+              contentContainerStyle={styles.modalScrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
             <Text style={styles.modalTitle}>Edit lobby</Text>
             {editError ? <Text style={styles.errorText}>{editError}</Text> : null}
 
@@ -1142,7 +1390,12 @@ export default function LobbyDetailScreen() {
                   <TouchableOpacity
                     key={option}
                     style={[styles.pill, selected && styles.pillSelected]}
-                    onPress={() => setEditSport(option)}
+                    onPress={() => {
+                      setEditSport(option);
+                      setEditLocationId(null);
+                      setEditSelectedSlot(null);
+                      setEditMaxPlayers(String(maxPlayersForSport(option)));
+                    }}
                     activeOpacity={0.9}
                   >
                     <Text style={[styles.pillText, selected && styles.pillTextSelected]}>
@@ -1159,19 +1412,25 @@ export default function LobbyDetailScreen() {
               onPress={() => setEditLocationPickerOpen(true)}
               activeOpacity={0.9}
             >
-              {editLocationId && locations.find((l) => l.location_id === editLocationId) ? (
-                <View>
-                  <Text style={styles.locationSelectName}>
-                    {locations.find((l) => l.location_id === editLocationId)?.name}
+              {editSelectedLocation ? (
+                <View style={styles.locationSelectContent}>
+                  <Text
+                    style={[styles.locationSelectCampus, { color: getCampusColor(editSelectedLocation.campus) }]}
+                  >
+                    {editSelectedLocation.campus}
                   </Text>
-                  <Text style={styles.locationSelectAddress}>
-                    {locations.find((l) => l.location_id === editLocationId)?.campus}
-                  </Text>
+                  <Text style={styles.locationSelectName}>{editSelectedLocation.name}</Text>
+                  <Text style={styles.locationSelectAddress}>{editSelectedLocation.address}</Text>
                 </View>
               ) : (
                 <Text style={styles.locationSelectPlaceholder}>Select location…</Text>
               )}
             </TouchableOpacity>
+            {editLocations.length === 0 ? (
+              <Text style={styles.mutedTextSmall}>
+                {editSport.trim() ? `No ${editSport} courts found.` : 'No locations available.'}
+              </Text>
+            ) : null}
 
             <Modal
               visible={editLocationPickerOpen}
@@ -1185,12 +1444,14 @@ export default function LobbyDetailScreen() {
                   onPress={() => setEditLocationPickerOpen(false)}
                 />
                 <View style={styles.locationPickerCard}>
-                  <Text style={styles.locationPickerTitle}>Select location</Text>
+                  <Text style={styles.locationPickerTitle}>
+                    {editSport.trim() ? `Select ${editSport} court` : 'Select location'}
+                  </Text>
                   <ScrollView
                     style={styles.locationPickerScroll}
                     contentContainerStyle={styles.locationPickerScrollContent}
                   >
-                    {locations.map((loc) => (
+                    {editLocations.map((loc) => (
                       <TouchableOpacity
                         key={loc.location_id}
                         style={[
@@ -1203,8 +1464,11 @@ export default function LobbyDetailScreen() {
                         }}
                         activeOpacity={0.9}
                       >
+                        <Text style={[styles.locationPickerCampus, { color: getCampusColor(loc.campus) }]}>
+                          {loc.campus}
+                        </Text>
                         <Text style={styles.locationPickerName}>{loc.name}</Text>
-                        <Text style={styles.locationPickerAddress}>{loc.campus}</Text>
+                        <Text style={styles.locationPickerAddress}>{loc.address}</Text>
                       </TouchableOpacity>
                     ))}
                   </ScrollView>
@@ -1219,96 +1483,145 @@ export default function LobbyDetailScreen() {
               </View>
             </Modal>
 
-            <Text style={styles.label}>Start time</Text>
-            {Platform.OS === 'web' ? (
-              <View style={styles.dateButton}>
-                <input
-                  type="datetime-local"
-                  style={{
-                    width: '100%',
-                    border: 'none',
-                    backgroundColor: 'transparent',
-                    fontSize: 14,
-                    color: DARK_NAVY,
-                    outline: 'none',
-                  }}
-                  value={(() => {
-                    const pad = (n: number) => n.toString().padStart(2, '0');
-                    const y = editScheduledAt.getFullYear();
-                    const m = pad(editScheduledAt.getMonth() + 1);
-                    const d = pad(editScheduledAt.getDate());
-                    const h = pad(editScheduledAt.getHours());
-                    const min = pad(editScheduledAt.getMinutes());
-                    return `${y}-${m}-${d}T${h}:${min}`;
-                  })()}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                    const v = e.target?.value;
-                    if (!v) return;
-                    const next = new Date(v);
-                    if (!Number.isNaN(next.getTime())) setEditScheduledAt(next);
-                  }}
-                  min={(() => {
-                    const now = new Date();
-                    const pad = (n: number) => n.toString().padStart(2, '0');
-                    const y = now.getFullYear();
-                    const m = pad(now.getMonth() + 1);
-                    const d = pad(now.getDate());
-                    const h = pad(now.getHours());
-                    const min = pad(now.getMinutes());
-                    return `${y}-${m}-${d}T${h}:${min}`;
-                  })()}
-                />
+            <Text style={styles.label}>Reserve time slot</Text>
+            <Text style={styles.mutedTextSmall}>
+              Choose a date, then select an open 30-minute slot. Booked slots are blocked for the
+              selected court.
+            </Text>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.dayScroller}
+            >
+              {editReservationDays.map((day) => {
+                const selected = dateKey(day) === dateKey(editSelectedDay);
+                return (
+                  <TouchableOpacity
+                    key={dateKey(day)}
+                    style={[styles.dayCard, selected && styles.dayCardSelected]}
+                    onPress={() => {
+                      setEditSelectedDay(day);
+                      setEditSelectedSlot(null);
+                    }}
+                    activeOpacity={0.9}
+                  >
+                    <Text style={[styles.dayCardText, selected && styles.dayCardTextSelected]}>
+                      {formatDayChip(day)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <View style={styles.slotLegendRow}>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, styles.legendDotOpen]} />
+                <Text style={styles.legendText}>Open</Text>
               </View>
-            ) : (
-              <>
-                <TouchableOpacity
-                  style={styles.dateButton}
-                  onPress={openEditDatePicker}
-                  activeOpacity={0.9}
-                >
-                  <Text style={styles.dateButtonText}>
-                    {editScheduledAt.toLocaleString(undefined, {
-                      dateStyle: 'medium',
-                      timeStyle: 'short',
-                    })}
-                  </Text>
-                </TouchableOpacity>
-                {showEditPicker && Platform.OS === 'ios' && (
-                  <DateTimePicker
-                    value={editScheduledAt}
-                    mode="datetime"
-                    minimumDate={new Date()}
-                    onChange={handleEditDateChange}
-                    display="spinner"
-                  />
-                )}
-                {showEditPicker && Platform.OS === 'android' && editAndroidPickerStep === 'date' && (
-                  <DateTimePicker
-                    value={editScheduledAt}
-                    mode="date"
-                    minimumDate={new Date()}
-                    onChange={handleEditDateChange}
-                    display="default"
-                  />
-                )}
-                {showEditPicker && Platform.OS === 'android' && editAndroidPickerStep === 'time' && (
-                  <DateTimePicker
-                    value={editScheduledAt}
-                    mode="time"
-                    onChange={handleEditDateChange}
-                    display="default"
-                  />
-                )}
-              </>
-            )}
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, styles.legendDotSelected]} />
+                <Text style={styles.legendText}>Selected</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, styles.legendDotBooked]} />
+                <Text style={styles.legendText}>Booked</Text>
+              </View>
+            </View>
+
+            <View style={styles.slotListCard}>
+              {!editLocationId ? (
+                <Text style={styles.slotHelpText}>
+                  Select a location first to view available time slots.
+                </Text>
+              ) : (
+                editAvailableTimeSlots.map((slotDate) => {
+                  const key = slotKey(slotDate);
+                  const isPast = slotDate.getTime() <= Date.now();
+                  const isBooked = editBookedSlotKeys.has(key);
+                  const isSelected = editSelectedSlot ? slotKey(editSelectedSlot) === key : false;
+                  const disabled = isPast || isBooked;
+                  return (
+                    <TouchableOpacity
+                      key={key}
+                      style={[
+                        styles.timeSlotRow,
+                        isSelected && styles.timeSlotRowSelected,
+                        disabled && styles.timeSlotRowDisabled,
+                      ]}
+                      disabled={disabled}
+                      onPress={() => {
+                        setEditSelectedSlot(slotDate);
+                        setEditScheduledAt(slotDate);
+                      }}
+                      activeOpacity={0.9}
+                    >
+                      <View>
+                        <Text
+                          style={[
+                            styles.timeSlotTime,
+                            isSelected && styles.timeSlotTimeSelected,
+                            disabled && styles.timeSlotTimeDisabled,
+                          ]}
+                        >
+                          {formatSlotTime(slotDate)}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.timeSlotSubtext,
+                            isSelected && styles.timeSlotSubtextSelected,
+                          ]}
+                        >
+                          30 minute reservation
+                        </Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.timeSlotStatusPill,
+                          isSelected && styles.timeSlotStatusSelected,
+                          disabled && styles.timeSlotStatusDisabled,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.timeSlotStatusText,
+                            isSelected && styles.timeSlotStatusTextSelected,
+                            disabled && styles.timeSlotStatusTextDisabled,
+                          ]}
+                        >
+                          {isBooked ? 'Booked' : isPast ? 'Past' : isSelected ? 'Selected' : 'Open'}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </View>
+
+            {editSelectedSlot && editSelectedLocation ? (
+              <View style={styles.reservationSummaryCard}>
+                <Text style={styles.reservationSummaryLabel}>Selected reservation</Text>
+                <Text style={styles.reservationSummaryTitle}>{editSelectedLocation.name}</Text>
+                <Text style={styles.reservationSummaryText}>
+                  {formatReservationSummary(editSelectedSlot)}
+                </Text>
+              </View>
+            ) : null}
 
             <Text style={styles.label}>Max players</Text>
             <TextInput
               style={styles.input}
               keyboardType="number-pad"
               value={editMaxPlayers}
-              onChangeText={setEditMaxPlayers}
+              onChangeText={(text) => {
+                const cleaned = text.replace(/[^0-9]/g, '').slice(0, 2);
+                setEditMaxPlayers(cleaned);
+              }}
+              maxLength={2}
             />
+            <Text style={styles.mutedTextSmall}>
+              Between 2 and {editSport.trim() ? maxPlayersForSport(editSport) : 50} players.
+            </Text>
 
             <Text style={styles.label}>Minimum ELO</Text>
             <TextInput
@@ -1419,6 +1732,7 @@ export default function LobbyDetailScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -1643,6 +1957,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
+  calendarCard: {
+    marginTop: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER_GRAY,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   mapCardTextWrap: {
     flex: 1,
   },
@@ -1806,6 +2131,12 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 24,
   },
+  modalScroll: {
+    maxHeight: '100%',
+  },
+  modalScrollContent: {
+    paddingBottom: 8,
+  },
   modalTitle: {
     fontSize: 20,
     fontWeight: '700',
@@ -1885,6 +2216,15 @@ const styles = StyleSheet.create({
     minHeight: 56,
     justifyContent: 'center',
   },
+  locationSelectContent: {
+    gap: 2,
+  },
+  locationSelectCampus: {
+    fontSize: 12,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
   locationSelectName: {
     fontSize: 14,
     fontWeight: '600',
@@ -1942,6 +2282,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: DARK_NAVY,
   },
+  locationPickerCampus: {
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginBottom: 2,
+  },
   locationPickerAddress: {
     fontSize: 12,
     color: MUTED_TEXT,
@@ -1970,6 +2317,161 @@ const styles = StyleSheet.create({
   dateButtonText: {
     fontSize: 14,
     color: DARK_NAVY,
+  },
+  dayScroller: {
+    gap: 8,
+    paddingVertical: 4,
+  },
+  dayCard: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: BORDER_GRAY,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  dayCardSelected: {
+    borderColor: RUTGERS_RED,
+    backgroundColor: 'rgba(204, 0, 51, 0.10)',
+  },
+  dayCardText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: DARK_NAVY,
+  },
+  dayCardTextSelected: {
+    color: RUTGERS_RED,
+  },
+  slotLegendRow: {
+    marginTop: 10,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legendDotOpen: {
+    backgroundColor: '#22C55E',
+  },
+  legendDotSelected: {
+    backgroundColor: RUTGERS_RED,
+  },
+  legendDotBooked: {
+    backgroundColor: '#9CA3AF',
+  },
+  legendText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: MUTED_TEXT,
+  },
+  slotListCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: BORDER_GRAY,
+    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+  },
+  slotHelpText: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 13,
+    color: MUTED_TEXT,
+  },
+  timeSlotRow: {
+    minHeight: 58,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER_GRAY,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+  },
+  timeSlotRowSelected: {
+    backgroundColor: 'rgba(204, 0, 51, 0.08)',
+  },
+  timeSlotRowDisabled: {
+    backgroundColor: '#F3F4F6',
+  },
+  timeSlotTime: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: DARK_NAVY,
+  },
+  timeSlotTimeSelected: {
+    color: RUTGERS_RED,
+  },
+  timeSlotTimeDisabled: {
+    color: MUTED_TEXT,
+  },
+  timeSlotSubtext: {
+    marginTop: 2,
+    fontSize: 12,
+    color: MUTED_TEXT,
+  },
+  timeSlotSubtextSelected: {
+    color: DARK_NAVY,
+  },
+  timeSlotStatusPill: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: 'rgba(34, 197, 94, 0.12)',
+  },
+  timeSlotStatusSelected: {
+    backgroundColor: RUTGERS_RED,
+  },
+  timeSlotStatusDisabled: {
+    backgroundColor: '#E5E7EB',
+  },
+  timeSlotStatusText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  timeSlotStatusTextSelected: {
+    color: '#FFFFFF',
+  },
+  timeSlotStatusTextDisabled: {
+    color: MUTED_TEXT,
+  },
+  reservationSummaryCard: {
+    marginTop: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(204, 0, 51, 0.20)',
+    backgroundColor: 'rgba(204, 0, 51, 0.06)',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  reservationSummaryLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: RUTGERS_RED,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  reservationSummaryTitle: {
+    marginTop: 4,
+    fontSize: 15,
+    fontWeight: '800',
+    color: DARK_NAVY,
+  },
+  reservationSummaryText: {
+    marginTop: 2,
+    fontSize: 13,
+    color: MUTED_TEXT,
+    fontWeight: '600',
   },
   switchRow: {
     flexDirection: 'row',

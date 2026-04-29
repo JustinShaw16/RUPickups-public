@@ -15,6 +15,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const palette = {
   page: '#CC0033',
@@ -54,8 +55,10 @@ function validateFields(
 // ─── component ────────────────────────────────────────────────────────────────
 export default function ContactUsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isWide = width >= 900;
+  const topInsetPadding = Math.max(insets.top + (Platform.OS === 'android' ? 18 : 0), 0);
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -104,7 +107,10 @@ export default function ContactUsScreen() {
       setMessage('');
       setErrors({ firstName: '', lastName: '', email: '', message: '' });
 
-      Alert.alert('Message sent!', "Thanks for reaching out. We'll get back to you soon.");
+      Alert.alert(
+        'Message sent!',
+        'Your message has been sent to support@rupickups.com. Our team will get back to you soon.',
+      );
     } catch {
       Alert.alert('Something went wrong', 'Please try again later.');
     } finally {
@@ -121,7 +127,7 @@ export default function ContactUsScreen() {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 24}
       >
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingTop: topInsetPadding }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >

@@ -13,6 +13,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { authedFetch } from '@/api/backend';
 import { InfoRow, profilePalette } from '@/components/profile/profile-ui';
@@ -68,8 +69,10 @@ const palette = profilePalette;
 
 export default function ViewProfileScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isWide = width >= 950;
+  const topInsetPadding = Math.max(insets.top + (Platform.OS === 'android' ? 18 : 0), 0);
 
   const [user, setUser] = useState<User | null>(null);
   const [sportStatsMap, setSportStatsMap] = useState<
@@ -160,7 +163,7 @@ export default function ViewProfileScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { paddingTop: topInsetPadding }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
