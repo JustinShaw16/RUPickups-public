@@ -257,6 +257,7 @@ export default function LobbyDetailScreen() {
   const [joinUnlockBusy, setJoinUnlockBusy] = useState(false);
   const [joinUnlockError, setJoinUnlockError] = useState<string | null>(null);
   const [calendarAdded, setCalendarAdded] = useState(false);
+  const [calendarPromptOpen, setCalendarPromptOpen] = useState(false);
 
   const [initialEditWasPublic, setInitialEditWasPublic] = useState(true);
   const [editPrivatePassword, setEditPrivatePassword] = useState('');
@@ -994,16 +995,8 @@ export default function LobbyDetailScreen() {
 
   const promptAddToCalendar = useCallback(() => {
     if (calendarAdded) return;
-    if (Platform.OS === 'web') {
-      const confirmed = window.confirm('Add this lobby to Google Calendar now?');
-      if (confirmed) void openLobbyInGoogleCalendar();
-      return;
-    }
-    Alert.alert('Add to Calendar', 'Add this lobby to Google Calendar now?', [
-      { text: 'Not now', style: 'cancel' },
-      { text: 'Sure', onPress: () => void openLobbyInGoogleCalendar() },
-    ]);
-  }, [calendarAdded, openLobbyInGoogleCalendar]);
+    setCalendarPromptOpen(true);
+  }, [calendarAdded]);
 
   if (!id) {
     return (
@@ -1285,6 +1278,41 @@ export default function LobbyDetailScreen() {
           </ScrollView>
         ) : null}
       </View>
+
+      <Modal
+        visible={calendarPromptOpen}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setCalendarPromptOpen(false)}
+      >
+        <View style={styles.centeredModalBackdrop}>
+          <View style={styles.centeredModalCard}>
+            <Text style={styles.modalTitle}>Add to Calendar</Text>
+            <Text style={styles.modalMessage}>
+              Would you like to add this lobby to your Google Calendar?
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={() => setCalendarPromptOpen(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.secondaryButtonText}>Not now</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.primaryButton}
+                onPress={() => {
+                  setCalendarPromptOpen(false);
+                  void openLobbyInGoogleCalendar();
+                }}
+                activeOpacity={0.9}
+              >
+                <Text style={styles.primaryButtonText}>Sure</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <Modal
         visible={joinPasswordModalOpen}
@@ -2122,6 +2150,22 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15, 23, 42, 0.45)',
     justifyContent: 'flex-end',
   },
+  centeredModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  centeredModalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 16,
+  },
   modalCard: {
     maxHeight: '90%',
     backgroundColor: '#FFFFFF',
@@ -2142,6 +2186,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: DARK_NAVY,
     marginBottom: 12,
+  },
+  modalMessage: {
+    fontSize: 14,
+    color: DARK_NAVY,
+    marginBottom: 6,
   },
   label: {
     fontSize: 14,

@@ -131,7 +131,7 @@ export default function CompleteProfile() {
         body: JSON.stringify({
           username: trimmedUsername,
           preferred_campus: preferredCampus,
-          phone_number: trimmedPhone,
+          phone_number: trimmedPhone || null,
         }),
       })
 
