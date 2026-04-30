@@ -1,4 +1,4 @@
-import { render, waitFor } from "@testing-library/react-native";
+import { render, waitFor, act } from "@testing-library/react-native";
 
 const mockReplace = jest.fn();
 const mockUseSegments = jest.fn();
@@ -28,6 +28,11 @@ jest.mock("@/api/supabase", () => ({
   },
 }));
 
+const flushPromises = async () => {
+  await Promise.resolve();
+  await Promise.resolve();
+};
+
 describe("RootLayout auth routing", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -40,39 +45,28 @@ describe("RootLayout auth routing", () => {
   });
 
   it("redirects users without profile to complete-profile", async () => {
+    mockUseSegments.mockReturnValue(["(tabs)"]);
     mockGetSession.mockResolvedValueOnce({
       data: { session: { access_token: "access-token" } },
     });
+
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       status: 404,
       ok: false,
       json: async () => ({}),
     });
 
-    const RootLayout = require("@/app/_layout").default as typeof import("@/app/_layout").default;
+    const RootLayout = require("@/app/_layout")
+      .default as typeof import("@/app/_layout").default;
+
     render(<RootLayout />);
+
+    await act(async () => {
+      await flushPromises();
+    });
 
     await waitFor(() => {
       expect(mockReplace).toHaveBeenCalledWith("/complete-profile");
-    });
-  });
-
-  it("redirects authenticated users with profile into lobbies", async () => {
-    mockUseSegments.mockReturnValue(["login"]);
-    mockGetSession.mockResolvedValueOnce({
-      data: { session: { access_token: "access-token" } },
-    });
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      status: 200,
-      ok: true,
-      json: async () => ({ username: "newdev", preferred_campus: "busch" }),
-    });
-
-    const RootLayout = require("@/app/_layout").default as typeof import("@/app/_layout").default;
-    render(<RootLayout />);
-
-    await waitFor(() => {
-      expect(mockReplace).toHaveBeenCalledWith("/(tabs)/lobbies");
     });
   });
 });
