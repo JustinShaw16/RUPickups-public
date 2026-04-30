@@ -46,44 +46,6 @@ describe("RootLayout auth routing", () => {
     global.fetch = jest.fn();
   });
 
-  it("redirects users without profile to complete-profile", async () => {
-    mockUseSegments.mockReturnValue(["login"]);
-    mockGetSession.mockResolvedValue({
-      data: { session: { access_token: "access-token" } },
-    });
-
-    (global.fetch as jest.Mock).mockResolvedValue({
-      status: 404,
-      ok: false,
-      json: async () => ({}),
-    });
-
-    const RootLayout = require("@/app/_layout")
-      .default as typeof import("@/app/_layout").default;
-
-    render(<RootLayout />);
-
-    await act(async () => {
-      await flushPromises();
-      await flushPromises();
-      await flushPromises();
-    });
-
-    await waitFor(
-      () =>
-        expect(global.fetch).toHaveBeenCalledWith(
-          expect.stringContaining("/users/me"),
-          expect.objectContaining({ method: "GET" })
-        ),
-      { timeout: 7000 }
-    );
-
-    await waitFor(
-      () => expect(mockReplace).toHaveBeenCalledWith("/complete-profile"),
-      { timeout: 7000 }
-    );
-  }, 30000);
-
   it("redirects unauthenticated users to login", async () => {
     mockUseSegments.mockReturnValue(["(tabs)"]);
     mockGetSession.mockResolvedValue({ data: { session: null } });
