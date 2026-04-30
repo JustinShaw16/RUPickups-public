@@ -61,13 +61,9 @@ describe("RootLayout auth routing", () => {
 
     render(<RootLayout />);
 
-    await act(async () => {
-      await flushPromises();
-    });
-
-    await waitFor(() => {
-      expect(mockReplace).toHaveBeenCalledWith("/complete-profile");
-    });
+    await waitFor(() =>
+      expect(mockReplace).toHaveBeenCalledWith("/complete-profile")
+    );
   });
 
   it("redirects unauthenticated users to login", async () => {
