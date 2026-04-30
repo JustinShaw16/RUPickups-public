@@ -29,7 +29,7 @@ jest.mock("@/api/supabase", () => ({
 }));
 
 const flushPromises = async () => {
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await Promise.resolve();
 };
 
 describe("RootLayout auth routing", () => {
@@ -62,6 +62,10 @@ describe("RootLayout auth routing", () => {
       .default as typeof import("@/app/_layout").default;
 
     render(<RootLayout />);
+
+    await act(async () => {
+      await flushPromises();
+    });
 
     await waitFor(
       () =>
