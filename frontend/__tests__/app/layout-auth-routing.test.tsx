@@ -44,11 +44,11 @@ describe("RootLayout auth routing", () => {
 
   it("redirects users without profile to complete-profile", async () => {
     mockUseSegments.mockReturnValue(["login"]);
-    mockGetSession.mockResolvedValueOnce({
+    mockGetSession.mockResolvedValue({
       data: { session: { access_token: "access-token" } },
     });
 
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
+    (global.fetch as jest.Mock).mockResolvedValue({
       status: 404,
       ok: false,
       json: async () => ({}),
@@ -71,7 +71,7 @@ describe("RootLayout auth routing", () => {
 
   it("redirects unauthenticated users to login", async () => {
     mockUseSegments.mockReturnValue(["(tabs)"]);
-    mockGetSession.mockResolvedValueOnce({ data: { session: null } });
+    mockGetSession.mockResolvedValue({ data: { session: null } });
 
     const RootLayout = require("@/app/_layout")
       .default as typeof import("@/app/_layout").default;
@@ -89,10 +89,10 @@ describe("RootLayout auth routing", () => {
 
   it("signs out and redirects to login when backend returns 401", async () => {
     mockUseSegments.mockReturnValue(["(tabs)"]);
-    mockGetSession.mockResolvedValueOnce({
+    mockGetSession.mockResolvedValue({
       data: { session: { access_token: "access-token" } },
     });
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
+    (global.fetch as jest.Mock).mockResolvedValue({
       status: 401,
       ok: false,
       json: async () => ({}),
@@ -115,10 +115,10 @@ describe("RootLayout auth routing", () => {
 
   it("redirects auth route users with valid profile to lobbies", async () => {
     mockUseSegments.mockReturnValue(["login"]);
-    mockGetSession.mockResolvedValueOnce({
+    mockGetSession.mockResolvedValue({
       data: { session: { access_token: "access-token" } },
     });
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
+    (global.fetch as jest.Mock).mockResolvedValue({
       status: 200,
       ok: true,
       json: async () => ({ username: "dev1", preferred_campus: "busch" }),
