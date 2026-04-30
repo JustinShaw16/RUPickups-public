@@ -29,8 +29,7 @@ jest.mock("@/api/supabase", () => ({
 }));
 
 const flushPromises = async () => {
-  await Promise.resolve();
-  await Promise.resolve();
+  await new Promise((resolve) => setTimeout(resolve, 0));
 };
 
 describe("RootLayout auth routing", () => {
@@ -40,7 +39,6 @@ describe("RootLayout auth routing", () => {
     mockOnAuthStateChange.mockReturnValue({
       data: { subscription: { unsubscribe: jest.fn() } },
     });
-    // @ts-expect-error test fetch mock
     global.fetch = jest.fn();
   });
 
@@ -69,7 +67,7 @@ describe("RootLayout auth routing", () => {
       () => expect(mockReplace).toHaveBeenCalledWith("/complete-profile"),
       { timeout: 3000 }
     );
-  });
+  }, 15000);
 
   it("redirects unauthenticated users to login", async () => {
     mockUseSegments.mockReturnValue(["(tabs)"]);

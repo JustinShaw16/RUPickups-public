@@ -23,7 +23,6 @@ jest.mock("@/api/supabase", () => ({
 describe("Login screen", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // @ts-expect-error test fetch mock
     global.fetch = jest.fn();
   });
 
