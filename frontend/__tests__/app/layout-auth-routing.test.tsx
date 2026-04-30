@@ -66,6 +66,7 @@ describe("RootLayout auth routing", () => {
     await act(async () => {
       await flushPromises();
       await flushPromises();
+      await flushPromises();
     });
 
     await waitFor(
