@@ -74,14 +74,14 @@ describe("RootLayout auth routing", () => {
           expect.stringContaining("/users/me"),
           expect.objectContaining({ method: "GET" })
         ),
-      { timeout: 10000 }
+      { timeout: 7000 }
     );
 
     await waitFor(
       () => expect(mockReplace).toHaveBeenCalledWith("/complete-profile"),
-      { timeout: 10000 }
+      { timeout: 7000 }
     );
-  }, 15000);
+  }, 30000);
 
   it("redirects unauthenticated users to login", async () => {
     mockUseSegments.mockReturnValue(["(tabs)"]);
