@@ -1,4 +1,4 @@
-import { render, waitFor, act } from "@testing-library/react-native";
+import { render, waitFor, act, cleanup } from "@testing-library/react-native";
 
 const mockReplace = jest.fn();
 const mockUseSegments = jest.fn();
@@ -33,8 +33,12 @@ const flushPromises = async () => {
 };
 
 describe("RootLayout auth routing", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
     mockUseSegments.mockReturnValue(["(tabs)"]);
     mockOnAuthStateChange.mockReturnValue({
       data: { subscription: { unsubscribe: jest.fn() } },
@@ -59,12 +63,18 @@ describe("RootLayout auth routing", () => {
 
     render(<RootLayout />);
 
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalled();
-    });
+    await waitFor(
+      () =>
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining("/users/me"),
+          expect.objectContaining({ method: "GET" })
+        ),
+      { timeout: 10000 }
+    );
 
-    await waitFor(() =>
-      expect(mockReplace).toHaveBeenCalledWith("/complete-profile")
+    await waitFor(
+      () => expect(mockReplace).toHaveBeenCalledWith("/complete-profile"),
+      { timeout: 10000 }
     );
   }, 15000);
 
