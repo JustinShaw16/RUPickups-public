@@ -1,3 +1,6 @@
+/**
+ * Email/password sign-in screen with basic client validation and profile gating.
+ */
 import { useState } from 'react'
 import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet } from 'react-native'
 import { Image } from 'expo-image'

@@ -1,3 +1,6 @@
+/**
+ * External link helper that opens links in the system browser on native.
+ */
 import { Href, Link } from 'expo-router';
 import { openBrowserAsync, WebBrowserPresentationStyle } from 'expo-web-browser';
 import { type ComponentProps } from 'react';

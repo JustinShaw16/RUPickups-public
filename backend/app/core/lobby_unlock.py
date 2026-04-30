@@ -1,3 +1,5 @@
+"""Utilities for lobby password hashing and signed unlock tokens."""
+
 import base64
 import hashlib
 import hmac

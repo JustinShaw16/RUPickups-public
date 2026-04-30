@@ -1,3 +1,6 @@
+/**
+ * Expo template "explore" reference screen retained for development examples.
+ */
 import { Image } from 'expo-image';
 import { Platform, StyleSheet } from 'react-native';
 

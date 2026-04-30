@@ -1,3 +1,6 @@
+/**
+ * Profile editing screen for updating user identity and preference fields.
+ */
 import MaterialIcons from '@expo/vector-icons/MaterialIcons'
 import { useRouter } from 'expo-router'
 import { useCallback, useEffect, useMemo, useState } from 'react'

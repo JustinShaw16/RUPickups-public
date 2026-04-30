@@ -1,3 +1,5 @@
+"""Business logic for match creation, state transitions, and team balancing."""
+
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -6,6 +8,7 @@ from app.repositories.matches_repository import player_ids_and_elos
 
 
 def get_matches() -> list[dict]:
+    """Return all matches from persistence."""
     db = get_supabase_client()
 
     response = (
@@ -19,6 +22,7 @@ def get_matches() -> list[dict]:
 
 
 def get_match_by_id(match_id: UUID) -> dict | None:
+    """Return a single match by id, or None if it does not exist."""
     db = get_supabase_client()
 
     response = (
@@ -35,6 +39,7 @@ def get_match_by_id(match_id: UUID) -> dict | None:
 
 
 def get_active_match_by_lobby(lobby_id: UUID) -> dict | None:
+    """Return the newest scheduled/in-progress match for a lobby."""
     db = get_supabase_client()
 
     response = (
@@ -53,6 +58,7 @@ def get_active_match_by_lobby(lobby_id: UUID) -> dict | None:
 
 
 def _get_lobby_host_user_id(lobby_id: UUID) -> str:
+    """Resolve the host user id for the given lobby id."""
     db = get_supabase_client()
     response = (
         db
@@ -69,6 +75,13 @@ def _get_lobby_host_user_id(lobby_id: UUID) -> str:
 
 
 def create_match(lobby_id: UUID, user_id: str) -> dict:
+    """Create the next scheduled match for a lobby if caller is the host.
+
+    Returns an existing active match when one already exists.
+    Raises:
+        PermissionError: If caller is not the lobby host.
+        RuntimeError: If lobby is missing or insert fails.
+    """
     db = get_supabase_client()
 
     host_user_id = _get_lobby_host_user_id(lobby_id)
@@ -113,6 +126,12 @@ def create_match(lobby_id: UUID, user_id: str) -> dict:
 
 
 def start_match(match_id: UUID, user_id: str) -> dict:
+    """Mark a scheduled match as in-progress.
+
+    Raises:
+        PermissionError: If caller is not the lobby host.
+        RuntimeError: If match does not exist, is completed, or update fails.
+    """
     db = get_supabase_client()
 
     match = get_match_by_id(match_id)
@@ -150,6 +169,12 @@ def start_match(match_id: UUID, user_id: str) -> dict:
 
 
 def complete_match(match_id: UUID, user_id: str, winner_team: str | None = None) -> dict:
+    """Mark a match as completed and optionally persist winner metadata.
+
+    Raises:
+        PermissionError: If caller is not the lobby host.
+        RuntimeError: If match does not exist or update fails.
+    """
     db = get_supabase_client()
 
     match = get_match_by_id(match_id)
@@ -187,6 +212,7 @@ def complete_match(match_id: UUID, user_id: str, winner_team: str | None = None)
 
 
 def create_balanced_teams(match_players: list[str], match_sport: str):
+    """Split players into two teams using a greedy Elo balancing strategy."""
     list_of_player_ids_and_elos = player_ids_and_elos(match_players=match_players, match_sport=match_sport)
 
     sorted_greatest_to_least_elos = sorted(

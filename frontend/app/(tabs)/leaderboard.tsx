@@ -1,3 +1,6 @@
+/**
+ * Sport-scoped leaderboard screen for top players ranked by ELO.
+ */
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,

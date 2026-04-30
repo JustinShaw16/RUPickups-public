@@ -1,3 +1,6 @@
+/**
+ * Expand/collapse UI section used in informational and guide-style screens.
+ */
 import { PropsWithChildren, useState } from 'react';
 import { StyleSheet, TouchableOpacity } from 'react-native';
 

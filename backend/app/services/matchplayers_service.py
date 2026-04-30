@@ -1,3 +1,5 @@
+"""Service functions for reading and mutating match-player mappings."""
+
 from app.db.supabase_client import get_supabase_client
 from app.repositories.matchplayers_repository import insert_match_players, delete_match_players
 

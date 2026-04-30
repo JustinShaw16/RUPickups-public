@@ -1,3 +1,6 @@
+/**
+ * Small animated demo component preserved from the Expo starter template.
+ */
 import Animated from 'react-native-reanimated';
 
 export function HelloWave() {

@@ -1,9 +1,9 @@
+/**
+ * Web-safe color-scheme hook that waits for hydration before exposing values.
+ */
 import { useEffect, useState } from 'react';
 import { useColorScheme as useRNColorScheme } from 'react-native';
 
-/**
- * To support static rendering, this value needs to be re-calculated on the client side for web
- */
 export function useColorScheme() {
   const [hasHydrated, setHasHydrated] = useState(false);
 

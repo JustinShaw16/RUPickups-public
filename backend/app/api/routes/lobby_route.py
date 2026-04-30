@@ -1,3 +1,5 @@
+"""Routes for lobby browsing, membership, and host actions."""
+
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status

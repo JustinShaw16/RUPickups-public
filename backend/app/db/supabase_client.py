@@ -1,3 +1,5 @@
+"""Singleton Supabase client factory for general backend data access."""
+
 from dotenv import load_dotenv
 load_dotenv()
 

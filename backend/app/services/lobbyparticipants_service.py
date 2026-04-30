@@ -1,3 +1,5 @@
+"""Service helpers for reading lobby participant rows."""
+
 from uuid import UUID
 
 from app.db.supabase_client import get_supabase_client

@@ -1,3 +1,6 @@
+/**
+ * Theme-aware container primitive for consistent background color handling.
+ */
 import { View, type ViewProps } from 'react-native';
 
 import { useThemeColor } from '@/hooks/use-theme-color';

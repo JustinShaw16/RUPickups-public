@@ -1,3 +1,6 @@
+/**
+ * Support contact form and outreach pathways for users needing assistance.
+ */
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
 import { useRef, useMemo, useState } from 'react';

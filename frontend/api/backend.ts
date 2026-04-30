@@ -1,3 +1,6 @@
+/**
+ * Shared backend networking helpers, including auth-aware fetch wrappers.
+ */
 import { Platform } from 'react-native'
 import { getLobbyUnlockTokenSync } from '@/api/lobbyUnlock'
 import { supabase } from '@/api/supabase'

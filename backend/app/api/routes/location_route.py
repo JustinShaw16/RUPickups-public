@@ -1,3 +1,5 @@
+"""Routes for retrieving playable location metadata."""
+
 from fastapi import APIRouter
 
 from app.models.locations import LocationResponse

@@ -1,3 +1,6 @@
+/**
+ * Singleton Supabase client for frontend auth/session operations.
+ */
 import { createClient } from "@supabase/supabase-js";
 
 export const supabase = createClient(

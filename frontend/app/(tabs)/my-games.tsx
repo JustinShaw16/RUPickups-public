@@ -1,3 +1,6 @@
+/**
+ * Shows the authenticated user's upcoming lobbies with refresh and quick navigation.
+ */
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,

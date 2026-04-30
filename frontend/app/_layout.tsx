@@ -1,3 +1,6 @@
+/**
+ * Root app layout that wires global providers and auth/profile-based routing.
+ */
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native'
 import { Stack, useRouter, useSegments } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'

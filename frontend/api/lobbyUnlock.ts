@@ -1,3 +1,6 @@
+/**
+ * Client-side storage helpers for per-lobby private unlock tokens.
+ */
 import { Platform } from 'react-native'
 
 const inMemoryUnlockByLobby = new Map<string, string>()

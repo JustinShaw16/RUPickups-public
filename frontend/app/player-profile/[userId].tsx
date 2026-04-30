@@ -1,3 +1,6 @@
+/**
+ * Public-facing player profile screen reached from leaderboard and lobby contexts.
+ */
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';

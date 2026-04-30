@@ -1,3 +1,6 @@
+/**
+ * Match detail and progression screen for start, completion, and participant views.
+ */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,

@@ -1,3 +1,6 @@
+/**
+ * Reusable profile UI primitives and style tokens shared across profile screens.
+ */
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import type { StyleProp, TextStyle, ViewStyle } from 'react-native';
 import { Text, View } from 'react-native';

@@ -1,3 +1,6 @@
+/**
+ * Theme-aware text primitive with semantic typography variants.
+ */
 import { StyleSheet, Text, type TextProps } from 'react-native';
 
 import { useThemeColor } from '@/hooks/use-theme-color';

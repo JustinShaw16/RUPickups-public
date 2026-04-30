@@ -1,3 +1,6 @@
+/**
+ * Lobbies discovery and creation screen with filtering, pagination, and slot booking UX.
+ */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,

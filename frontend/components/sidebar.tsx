@@ -1,3 +1,6 @@
+/**
+ * App sidebar menu for profile, help, and account navigation actions.
+ */
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {

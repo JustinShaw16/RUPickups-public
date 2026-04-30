@@ -1,3 +1,5 @@
+"""Routes for reading user-facing notifications."""
+
 from fastapi import APIRouter
 
 from app.services.notifications_service import get_notifications

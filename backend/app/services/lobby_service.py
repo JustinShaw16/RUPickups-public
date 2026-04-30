@@ -1,3 +1,5 @@
+"""Core lobby business rules for visibility, access, and lifecycle actions."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -13,10 +15,12 @@ from app.repositories import lobby_repository, playerstats_repository
 
 
 class LobbyConflictError(ValueError):
+    """Raised when lobby creation/update violates uniqueness or schedule constraints."""
     pass
 
 
 def _parse_datetime(value: object) -> datetime:
+    """Parse ISO datetime strings (including trailing Z) into datetime objects."""
     if isinstance(value, datetime):
         return value
     text = str(value or "").strip()
@@ -26,6 +30,7 @@ def _parse_datetime(value: object) -> datetime:
 
 
 def _user_sport_elo(*, user_id: str, sport: str) -> int:
+    """Return user's Elo for a sport, defaulting when no stat row exists."""
     uid = str(user_id).strip()
     sport_name = str(sport or playerstats_repository.DEFAULT_SPORT)
     elo_map = playerstats_repository.get_sport_elo_map_by_user_ids(
@@ -36,6 +41,7 @@ def _user_sport_elo(*, user_id: str, sport: str) -> int:
 
 
 def _uids_match(a, b) -> bool:
+    """Compare ids as UUIDs when possible, otherwise as normalized strings."""
     if a is None or b is None:
         return False
     try:
@@ -45,10 +51,12 @@ def _uids_match(a, b) -> bool:
 
 
 def _strip_secrets(row: dict) -> dict:
+    """Remove secret fields before returning lobby data to callers."""
     return {k: v for k, v in row.items() if k != "password_hash"}
 
 
 def _is_host(lobby: dict, user_id: str | None) -> bool:
+    """Return True when provided user_id matches lobby host_user_id."""
     if not user_id:
         return False
     return _uids_match(lobby.get("host_user_id"), user_id)
@@ -62,6 +70,7 @@ def _roster_is_visible(
     unlock_token: str | None,
     member_lobby_ids: set[str] | None = None,
 ) -> bool:
+    """Determine whether participant details should be visible to the requester."""
     # UX requirement: private lobbies should display the same roster info as public lobbies
     # when someone opens the lobby. "Full access" (joining) is still protected by password.
     return True
@@ -75,6 +84,7 @@ def _to_lobby_response(
     unlock_token: str | None,
     member_lobby_ids: set[str] | None = None,
 ) -> LobbyResponse:
+    """Map raw repository row data into the API `LobbyResponse` model."""
     hidden = not _roster_is_visible(
         lobby=row,
         lobby_id=lobby_id,
@@ -91,6 +101,7 @@ def _to_lobby_response(
 
 
 def get_all_lobbies(*, user_id: str | None, unlock_token: str | None) -> list[LobbyResponse]:
+    """Return all lobbies shaped for the current viewer."""
     rows = lobby_repository.get_all_lobbies()
     member_ids = (
         lobby_repository.get_lobby_ids_for_participant(user_id) if user_id else set()
@@ -111,6 +122,7 @@ def get_all_lobbies(*, user_id: str | None, unlock_token: str | None) -> list[Lo
 
 
 def get_my_upcoming_lobbies(user_id: str) -> list[LobbyResponse]:
+    """Return future lobbies where the user is participating."""
     rows = lobby_repository.get_upcoming_lobbies_for_user(user_id)
     return [
         LobbyResponse.model_validate(
@@ -121,12 +133,14 @@ def get_my_upcoming_lobbies(user_id: str) -> list[LobbyResponse]:
 
 
 def get_lobby_by_id(lobby_id: UUID) -> dict | None:
+    """Fetch a lobby row by id from the repository layer."""
     return lobby_repository.get_lobby_by_id(lobby_id)
 
 
 def get_lobby_for_viewer(
     lobby_id: UUID, user_id: str, unlock_token: str | None
 ) -> LobbyResponse | None:
+    """Return one lobby shaped for viewer permissions, or None if missing."""
     row = lobby_repository.get_lobby_by_id(lobby_id)
     if not row:
         return None
@@ -141,6 +155,12 @@ def get_lobby_for_viewer(
 
 
 def create_lobby(*, user_id: str, payload: LobbyCreate) -> LobbyResponse:
+    """Create a lobby after validating name, Elo threshold, and schedule conflicts.
+
+    Raises:
+        ValueError: For invalid input (empty name, invalid min Elo).
+        LobbyConflictError: For duplicate names or time/location conflicts.
+    """
     lobby_name = payload.lobby_name.strip()
     if not lobby_name:
         raise ValueError("Lobby name is required")
@@ -175,6 +195,13 @@ def create_lobby(*, user_id: str, payload: LobbyCreate) -> LobbyResponse:
 
 
 def update_lobby(*, lobby_id: UUID, user_id: str, payload: LobbyUpdate) -> LobbyResponse | None:
+    """Update lobby fields when requested by host and constraints are satisfied.
+
+    Returns None when lobby is missing or caller is not host.
+    Raises:
+        ValueError: For invalid field updates.
+        LobbyConflictError: For duplicate names or booking conflicts.
+    """
     lobby = lobby_repository.get_lobby_by_id(lobby_id)
     if not lobby or str(lobby.get("host_user_id")) != user_id:
         return None
@@ -246,6 +273,7 @@ def update_lobby(*, lobby_id: UUID, user_id: str, payload: LobbyUpdate) -> Lobby
 
 
 def delete_lobby(*, lobby_id: UUID, user_id: str) -> bool:
+    """Delete a lobby when caller is the host; otherwise return False."""
     lobby = lobby_repository.get_lobby_by_id(lobby_id)
     if not lobby or str(lobby.get("host_user_id")) != user_id:
         return False
@@ -254,6 +282,7 @@ def delete_lobby(*, lobby_id: UUID, user_id: str) -> bool:
 
 
 def _player_id_key(player_id) -> str:
+    """Normalize player ids for reliable equality checks."""
     try:
         return str(UUID(str(player_id).strip()))
     except (TypeError, ValueError):
@@ -261,6 +290,7 @@ def _player_id_key(player_id) -> str:
 
 
 def unlock_private_lobby(*, lobby_id: UUID, user_id: str, password: str) -> str | None:
+    """Return an unlock token for private lobbies when password validation passes."""
     lobby = lobby_repository.get_lobby_by_id(lobby_id)
     if not lobby:
         return None
@@ -275,6 +305,11 @@ def unlock_private_lobby(*, lobby_id: UUID, user_id: str, password: str) -> str 
 
 
 def join_lobby(*, lobby_id: UUID, user_id: str, unlock_token: str | None) -> dict:
+    """Join a lobby after access, capacity, duplication, and Elo checks.
+
+    Raises:
+        RuntimeError: If lobby is missing, locked, full, duplicate, or Elo-gated.
+    """
     lobby = lobby_repository.get_lobby_by_id(lobby_id)
     if not lobby:
         raise RuntimeError("Lobby not found")
@@ -311,6 +346,7 @@ def join_lobby(*, lobby_id: UUID, user_id: str, unlock_token: str | None) -> dic
 
 
 def leave_lobby(*, lobby_id: UUID, user_id: str, host_user_id: str) -> dict:
+    """Remove a player from a lobby and handle host departure behavior."""
     return lobby_repository.leave_lobby(
         lobby_id=lobby_id, player_id=user_id, host_user_id=host_user_id
     )
@@ -323,6 +359,7 @@ def is_lobby_roster_visible(
     user_id: str,
     unlock_token: str | None,
 ) -> bool:
+    """Public helper that evaluates lobby roster visibility for a user."""
     member_ids = lobby_repository.get_lobby_ids_for_participant(user_id)
     return _roster_is_visible(
         lobby,

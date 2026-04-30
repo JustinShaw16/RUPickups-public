@@ -1,3 +1,5 @@
+"""Cached Supabase admin client factory for privileged operations."""
+
 from functools import lru_cache
 from typing import Optional, TYPE_CHECKING
 

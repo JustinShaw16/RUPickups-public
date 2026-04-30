@@ -1,3 +1,5 @@
+"""Routes for querying and updating player stats."""
+
 from fastapi import APIRouter, status, Query
 from uuid import UUID
 

@@ -1,3 +1,6 @@
+/**
+ * Lobby detail screen for participants, host controls, and match entry points.
+ */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,

@@ -1,3 +1,5 @@
+"""Authentication helpers for extracting user identity from bearer tokens."""
+
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from app.db.supabase_client import get_supabase_client

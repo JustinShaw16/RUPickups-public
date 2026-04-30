@@ -1,3 +1,5 @@
+"""Service layer for user profiles, leaderboard data, and sport stats."""
+
 from app.repositories import playerstats_repository, user_repository
 from app.models.users import UserCreate
 

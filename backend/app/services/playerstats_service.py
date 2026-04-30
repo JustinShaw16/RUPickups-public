@@ -1,3 +1,5 @@
+"""Service layer for reading and processing player statistics."""
+
 from uuid import UUID
 
 from app.repositories import playerstats_repository

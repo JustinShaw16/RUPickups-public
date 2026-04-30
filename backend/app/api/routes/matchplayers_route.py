@@ -1,3 +1,5 @@
+"""Routes for managing players assigned to matches."""
+
 from uuid import UUID
 
 from fastapi import APIRouter, status

@@ -1,3 +1,6 @@
+/**
+ * Main tab-shell layout with a custom top bar and animated sidebar drawer.
+ */
 import { Tabs } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import {

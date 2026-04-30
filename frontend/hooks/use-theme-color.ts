@@ -1,6 +1,5 @@
 /**
- * Learn more about light and dark modes:
- * https://docs.expo.dev/guides/color-schemes/
+ * Resolves a theme color token, with optional explicit light/dark overrides.
  */
 
 import { Colors } from '@/constants/theme';

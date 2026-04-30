@@ -1,3 +1,6 @@
+/**
+ * Account registration screen for creating new Supabase-authenticated users.
+ */
 import { useState } from 'react'
 import {
   View,

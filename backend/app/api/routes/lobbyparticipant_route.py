@@ -1,3 +1,5 @@
+"""Routes for reading lobby participant records."""
+
 from fastapi import APIRouter
 
 from app.services.lobbyparticipants_service import get_lobby_participants

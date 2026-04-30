@@ -1,3 +1,6 @@
+/**
+ * First-run profile completion flow after authentication succeeds.
+ */
 import { useState } from 'react'
 import {
   View,

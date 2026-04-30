@@ -1,3 +1,6 @@
+/**
+ * In-app help and onboarding reference for core gameplay flows.
+ */
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
 import {

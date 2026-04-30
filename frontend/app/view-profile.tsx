@@ -1,3 +1,6 @@
+/**
+ * Authenticated user's profile overview with navigation to profile management actions.
+ */
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';

@@ -1,3 +1,5 @@
+"""Health-check route for validating API to Supabase connectivity."""
+
 from fastapi import APIRouter
 from app.db.supabase_client import get_supabase_client
 

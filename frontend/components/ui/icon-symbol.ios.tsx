@@ -1,3 +1,6 @@
+/**
+ * iOS-specific icon wrapper using SF Symbols via Expo SymbolView.
+ */
 import { SymbolView, SymbolViewProps, SymbolWeight } from 'expo-symbols';
 import { StyleProp, ViewStyle } from 'react-native';
 

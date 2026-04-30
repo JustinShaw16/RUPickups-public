@@ -1,3 +1,5 @@
+"""Routes for user profile and leaderboard APIs."""
+
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.auth import require_user_id
