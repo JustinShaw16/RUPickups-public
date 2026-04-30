@@ -61,8 +61,13 @@ describe("RootLayout auth routing", () => {
 
     render(<RootLayout />);
 
-    await waitFor(() =>
-      expect(mockReplace).toHaveBeenCalledWith("/complete-profile")
+    await act(async () => {
+      await flushPromises();
+    });
+
+    await waitFor(
+      () => expect(mockReplace).toHaveBeenCalledWith("/complete-profile"),
+      { timeout: 3000 }
     );
   });
 
