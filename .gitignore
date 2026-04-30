@@ -17,3 +17,6 @@ coverage/
 frontend/coverage/
 backend/coverage.xml
 backend/.coverage
+
+# local editor metadata
+.cursor/

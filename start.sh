@@ -62,7 +62,16 @@ if [[ "$NEED_ENV" -eq 1 ]]; then
 fi
 
 # Frontend dependencies
-if [[ ! -d "$ROOT/frontend/node_modules" ]]; then
+HAS_NODE_MODULES=false
+HAS_TYPES_JEST=false
+if [[ -d "$ROOT/frontend/node_modules" ]]; then
+  HAS_NODE_MODULES=true
+fi
+if (cd "$ROOT/frontend" && npm ls @types/jest --depth=0 >/dev/null 2>&1); then
+  HAS_TYPES_JEST=true
+fi
+
+if [[ "$HAS_NODE_MODULES" != true || "$HAS_TYPES_JEST" != true ]]; then
   echo "Installing frontend dependencies..."
   (cd "$ROOT/frontend" && npm install)
 fi
