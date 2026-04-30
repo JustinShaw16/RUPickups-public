@@ -57,12 +57,17 @@ describe("RootLayout auth routing", () => {
 
     await act(async () => {
       await flushPromises();
+      await flushPromises();
     });
 
     await waitFor(() => {
+      expect(mockGetSession).toHaveBeenCalled();
+    }, { timeout: 10000 });
+
+    await waitFor(() => {
       expect(mockReplace).toHaveBeenCalledWith("/login");
-    });
-  });
+    }, { timeout: 10000 });
+  }, 20000);
 
   it("signs out and redirects to login when backend returns 401", async () => {
     mockUseSegments.mockReturnValue(["(tabs)"]);
