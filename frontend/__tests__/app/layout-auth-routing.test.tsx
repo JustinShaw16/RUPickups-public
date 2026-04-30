@@ -59,13 +59,12 @@ describe("RootLayout auth routing", () => {
 
     render(<RootLayout />);
 
-    await act(async () => {
-      await flushPromises();
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalled();
     });
 
-    await waitFor(
-      () => expect(mockReplace).toHaveBeenCalledWith("/complete-profile"),
-      { timeout: 3000 }
+    await waitFor(() =>
+      expect(mockReplace).toHaveBeenCalledWith("/complete-profile")
     );
   }, 15000);
 
