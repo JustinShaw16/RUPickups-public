@@ -43,7 +43,7 @@ describe("RootLayout auth routing", () => {
   });
 
   it("redirects users without profile to complete-profile", async () => {
-    mockUseSegments.mockReturnValue(["(tabs)"]);
+    mockUseSegments.mockReturnValue(["login"]);
     mockGetSession.mockResolvedValueOnce({
       data: { session: { access_token: "access-token" } },
     });
